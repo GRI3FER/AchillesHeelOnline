@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: achilles-heel-chess-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 8080
+    autoDeploy: true
+    healthCheckPath: /
