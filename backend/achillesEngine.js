@@ -33,14 +33,37 @@ function queen(c){ return { type:"Queen", color:c }; }
 
 function mirrorSquare(r, c) { return { row: 7 - r, col: c }; }
 
+// Find Patroclus: mirror of Achilles, must be same type if possible
+function findPatroclus(board, achilles) {
+  if (!achilles) return null;
+  const mirror = mirrorSquare(achilles.row, achilles.col);
+  // Try to find a piece of the same type at the mirror
+  const piece = board[mirror.row]?.[mirror.col];
+  if (piece && piece.type === achilles.type && piece.color === achilles.color) {
+    return { row: mirror.row, col: mirror.col, type: piece.type, id: piece.id, color: piece.color };
+  }
+  // If not, search the board for another piece of the same type and color
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = board[r][c];
+      if (p && p.type === achilles.type && p.color === achilles.color) {
+        return { row: r, col: c, type: p.type, id: p.id, color: p.color };
+      }
+    }
+  }
+  // If none found, return null
+  return null;
+}
+
 export function setAchilles(state, color, row, col) {
   const piece = state.board[row][col];
   if (!piece || piece.color !== color || piece.type === "Pawn") return state;
-  const mirror = mirrorSquare(row, col);
+  const achillesObj = { row, col, type: piece.type, id: piece.id, color: piece.color };
+  const patroclusObj = findPatroclus(state.board, achillesObj);
   return {
     ...state,
-    achilles: { ...state.achilles, [color]: { row, col, type: piece.type } },
-    patroclus: { ...state.patroclus, [color]: mirror },
+    achilles: { ...state.achilles, [color]: achillesObj },
+    patroclus: { ...state.patroclus, [color]: patroclusObj },
   };
 }
 
@@ -82,8 +105,8 @@ export function applyMove(state, from, to) {
     return state;
   }
 
-  // capturing opponent Achilles
-  if (target && isAchilles(state, tr, tc, opponent)) {
+  // capturing opponent Achilles (must be a capture, not just moving onto the square)
+  if (target && isAchilles(state, tr, tc, opponent) && target.color === opponent) {
     if (state.immortal[opponent]) {
       // attacker dies
       state.board[fr][fc] = null;
@@ -96,7 +119,7 @@ export function applyMove(state, from, to) {
       state.board[fr][fc] = null;
       state.winner = color;
       state.moveLog.push({ from, to, piece, captured: target, note: 'Achilles captured' });
-      decrementImmortals(state, color);
+      // End the game immediately, do not process further moves or promotion
       return state;
     }
   }
@@ -138,11 +161,18 @@ export function applyMove(state, from, to) {
 function isAchilles(state, row, col, color) {
   const a = state.achilles[color];
   if (!a) return false;
+  const piece = state.board[row][col];
+  if (!piece) return false;
+  // Prefer ID check if available
+  if (a.id && piece.id) return a.id === piece.id;
   return a.row === row && a.col === col;
 }
 function isPatroclus(state, row, col, color) {
   const p = state.patroclus[color];
   if (!p) return false;
+  const piece = state.board[row][col];
+  if (!piece) return false;
+  if (p.id && piece.id) return p.id === piece.id;
   return p.row === row && p.col === col;
 }
 
@@ -167,8 +197,9 @@ export function handlePromotion(state, color, option, payload) {
     const newType = payload && payload.newType ? payload.newType : state.board[row][col].type;
     state.board[row][col].type = newType;
     // Make this piece the new Achilles for the player
-    state.achilles[color] = { row, col, type: newType };
-    state.patroclus[color] = mirrorSquare(row, col);
+    const achillesObj = { row, col, type: newType, id: state.board[row][col].id, color };
+    state.achilles[color] = achillesObj;
+    state.patroclus[color] = findPatroclus(state.board, achillesObj);
   }
 
   // clear promotion and advance turn

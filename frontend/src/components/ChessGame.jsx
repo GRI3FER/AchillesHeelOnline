@@ -63,6 +63,31 @@ export default function ChessGame() {
   const [onlinePromoChoice, setOnlinePromoChoice] = useState(null);
   const [onlinePromoNewType, setOnlinePromoNewType] = useState("Queen");
   const [showRules, setShowRules] = useState(false);
+  const [popup, setPopup] = useState("");
+
+  // URL auto-join
+  useEffect(() => {
+    if (joined || localMode) return;
+    const params = new URLSearchParams(window.location.search);
+    const urlRoom = params.get("room");
+    if (urlRoom && urlRoom.length === 6) {
+      joinRoom(urlRoom);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Show popups for key events (immortality, Achilles reveal, winner, etc)
+  useEffect(() => {
+    if (game?.winner) {
+      setPopup(`Winner: ${game.winner[0].toUpperCase() + game.winner.slice(1)}!`);
+    } else if (game?.immortal && game.immortal[myColor] && game.immortalCountdown?.[myColor] === 5) {
+      setPopup("Your Achilles is now IMMORTAL for 5 moves!");
+    } else if (game?.immortal && game.immortal[myColor === "white" ? "black" : "white"] && game.immortalCountdown?.[myColor === "white" ? "black" : "white"] === 5) {
+      setPopup("Opponent's Achilles is now IMMORTAL for 5 moves!");
+    } else if (game?.revealedAchilles && game.revealedAchilles[myColor === "white" ? "black" : "white"]) {
+      setPopup(`You have discovered your opponent's Achilles type: ${game.achilles[myColor === "white" ? "black" : "white"].type}`);
+    }
+  }, [game?.winner, game?.immortal, game?.immortalCountdown, game?.revealedAchilles]);
 
   const myColor = game?.myColor || "white";
   const needsAchilles = localMode
@@ -142,27 +167,31 @@ export default function ChessGame() {
           ? "white"
           : "black"
         : myColor;
-          // block new moves while a local promotion is pending
-          if (localMode && localPromotion) return;
-          // ACHILLES SELECTION
+      // block new moves while a local promotion is pending
+      if (localMode && localPromotion) return;
+      // ACHILLES SELECTION
       const piece = board[row][col];
 
-      if (piece && piece.color === turnColor && piece.type !== "Pawn") {
-        if (localMode) {
-          setLocalAchilles((prev) => ({
-            ...prev,
-            [turnColor]: { row, col, type: piece.type },
-          }));
-          setLocalGame((g) => ({ ...g, turn: g.turn + 1 }));
-        } else {
-          ws.current?.send(
-            JSON.stringify({
-              type: "choose-achilles",
-              roomCode,
-              payload: { row, col },
-            })
-          );
-        }
+      // Prevent pawns from being selected as Achilles (do nothing if pawn)
+      if (!piece || piece.color !== turnColor || piece.type === "Pawn") {
+        setSelected(null);
+        return;
+      }
+
+      if (localMode) {
+        setLocalAchilles((prev) => ({
+          ...prev,
+          [turnColor]: { row, col, type: piece.type },
+        }));
+        setLocalGame((g) => ({ ...g, turn: g.turn + 1 }));
+      } else {
+        ws.current?.send(
+          JSON.stringify({
+            type: "choose-achilles",
+            roomCode,
+            payload: { row, col },
+          })
+        );
       }
 
       setSelected(null);
@@ -184,15 +213,42 @@ export default function ChessGame() {
 
     // LOCAL MOVE with validation
     if (localMode) {
-      if (!isValidMoveLocal(board, [sr, sc], [row, col])) {
+      // Only allow the correct player to move
+      const turnColor = localGame.turn % 2 === 0 ? "white" : "black";
+      const piece = board[sr][sc];
+      if (!isValidMoveLocal(board, [sr, sc], [row, col]) || piece.color !== turnColor) {
         setSelected(null);
         return;
       }
-      const piece = board[sr][sc];
       const target = board[row][col];
       const newBoard = board.map((r) => r.slice());
       newBoard[row][col] = newBoard[sr][sc];
       newBoard[sr][sc] = null;
+
+      // Check for Achilles capture
+      const opp = turnColor === "white" ? "black" : "white";
+      const ach = localAchilles[opp];
+      if (ach && ach.row === row && ach.col === col) {
+        setBoard(newBoard);
+        setLocalGame((g) => ({
+          ...g,
+          board: newBoard,
+          moveLog: [
+            ...(g.moveLog || []),
+            {
+              from: [sr, sc],
+              to: [row, col],
+              piece,
+              captured: target,
+              note: "Achilles captured",
+            },
+          ],
+          winner: turnColor,
+        }));
+        setPopup(`Winner: ${turnColor[0].toUpperCase() + turnColor.slice(1)}!`);
+        setSelected(null);
+        return;
+      }
 
       // If this is a pawn reaching the promotion rank, set promotion and do NOT advance turn
       const promotionRow = piece.color === "white" ? 0 : 7;
@@ -256,19 +312,6 @@ export default function ChessGame() {
 
     setSelected(null);
   }
-
-  // URL auto-join
-  useEffect(() => {
-    if (joined || localMode) return;
-
-    const params = new URLSearchParams(window.location.search);
-    const urlRoom = params.get("room");
-
-    if (urlRoom && urlRoom.length === 6) {
-      joinRoom(urlRoom);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // --------------------
   // helpers
@@ -413,26 +456,21 @@ export default function ChessGame() {
     const newBoard = localGame.board.map((r) => r.slice());
 
     if (option === "discover") {
+      // Promoted pawn becomes the type of the opponent's Achilles, no message
       const oppLoc = localAchilles[opp];
-      if (!oppLoc) {
-        addToast("Opponent's Achilles is unknown.");
-      } else {
+      if (oppLoc) {
         const oppPiece = newBoard[oppLoc.row]?.[oppLoc.col];
         if (oppPiece) {
-          // Turn pawn into opponent Achilles' type
-          newBoard[row][col] = { color: color, type: oppPiece.type };
-          addToast(`${opp[0].toUpperCase() + opp.slice(1)}'s Achilles is a ${oppPiece.type}`);
-        } else {
-          addToast("Opponent Achilles piece not found.");
+          newBoard[row][col] = { ...newBoard[row][col], type: oppPiece.type };
         }
       }
     } else if (option === "change") {
-      // Align with server: set promoted pawn to chosen type (newType) and make it the player's Achilles
-      const promoPiece = newBoard[row][col];
-      const chosen = newType || promoPiece.type;
-      promoPiece.type = chosen;
-      setLocalAchilles((prev) => ({ ...prev, [color]: { row, col, type: chosen } }));
-      addToast(`${color[0].toUpperCase() + color.slice(1)}'s Achilles changed to ${chosen}`);
+      // Pawn becomes the player's old Achilles type
+      const oldAchilles = localAchilles[color];
+      if (oldAchilles) {
+        newBoard[row][col] = { ...newBoard[row][col], type: oldAchilles.type };
+        setLocalAchilles((prev) => ({ ...prev, [color]: { row, col, type: oldAchilles.type, id: newBoard[row][col].id } }));
+      }
     }
 
     setLocalGame((g) => ({ ...g, board: newBoard, turn: g.turn + 1 }));
@@ -455,6 +493,19 @@ export default function ChessGame() {
   // --------------------
   // UI: landing
   // --------------------
+  // Always call hooks first, then return UI
+  useEffect(() => {
+    if (game?.winner) {
+      setPopup(`Winner: ${game.winner[0].toUpperCase() + game.winner.slice(1)}!`);
+    } else if (game?.immortal && game.immortal[myColor] && game.immortalCountdown?.[myColor] === 5) {
+      setPopup("Your Achilles is now IMMORTAL for 5 moves!");
+    } else if (game?.immortal && game.immortal[myColor === "white" ? "black" : "white"] && game.immortalCountdown?.[myColor === "white" ? "black" : "white"] === 5) {
+      setPopup("Opponent's Achilles is now IMMORTAL for 5 moves!");
+    } else if (game?.revealedAchilles && game.revealedAchilles[myColor === "white" ? "black" : "white"]) {
+      setPopup(`You have discovered your opponent's Achilles type: ${game.achilles[myColor === "white" ? "black" : "white"].type}`);
+    }
+  }, [game?.winner, game?.immortal, game?.immortalCountdown, game?.revealedAchilles]);
+
   if (!joined && !localMode) {
     return (
       <div style={{ padding: 40 }}>
@@ -477,25 +528,6 @@ export default function ChessGame() {
       </div>
     );
   }
-
-  // --------------------
-  // UI: local
-  // --------------------
-
-  // --- Pop-up state ---
-  const [popup, setPopup] = useState("");
-  // Show popups for key events (immortality, Achilles reveal, winner, etc)
-  useEffect(() => {
-    if (game?.winner) {
-      setPopup(`Winner: ${game.winner[0].toUpperCase() + game.winner.slice(1)}!`);
-    } else if (game?.immortal && game.immortal[myColor] && game.immortalCountdown?.[myColor] === 5) {
-      setPopup("Your Achilles is now IMMORTAL for 5 moves!");
-    } else if (game?.immortal && game.immortal[myColor === "white" ? "black" : "white"] && game.immortalCountdown?.[myColor === "white" ? "black" : "white"] === 5) {
-      setPopup("Opponent's Achilles is now IMMORTAL for 5 moves!");
-    } else if (game?.revealedAchilles && game.revealedAchilles[myColor === "white" ? "black" : "white"]) {
-      setPopup(`You have discovered your opponent's Achilles type: ${game.achilles[myColor === "white" ? "black" : "white"].type}`);
-    }
-  }, [game?.winner, game?.immortal, game?.immortalCountdown, game?.revealedAchilles]);
 
   // --- Move log ---
   function getMoveLog(moveLog) {
@@ -531,66 +563,57 @@ export default function ChessGame() {
       statusMsg = `${turnColor[0].toUpperCase() + turnColor.slice(1)}'s turn`;
     }
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 600 }}>
-        <h2 style={{ marginBottom: 8 }}>Local Mode</h2>
-        <Popup message={popup} onClose={() => setPopup("")} />
-        {/* Turn/Achilles status */}
-        <div style={{
-          marginBottom: 12,
-          fontSize: 22,
-          fontWeight: 600,
-          color: needsAchilles ? (turnColor === 'white' ? '#c90' : '#09c') : '#333',
-          letterSpacing: 0.5,
-          textShadow: '0 1px 0 #fff, 0 2px 8px #0001',
-        }}>{statusMsg}</div>
-        {/* Buttons above board, centered */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 12, alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <label style={{ fontWeight: 600 }}>Force file:</label>
-            <select value={forceFile} onChange={(e) => setForceFile(e.target.value)} style={{ fontSize: 16, padding: '6px 10px' }}>
-              {['a','b','c','d','e','f','g','h'].map((f) => <option key={f} value={f}>{f.toUpperCase()}</option>)}
-            </select>
-          </div>
-          <button onClick={() => forceLocalPromotion("white")} style={buttonStyle}>Force White Promotion</button>
-          <button onClick={() => forceLocalPromotion("black")} style={buttonStyle}>Force Black Promotion</button>
-        </div>
-        {localPromotion ? (
-          <div style={{ marginBottom: 16, textAlign: 'center' }}>
-            <div style={{ marginBottom: 8, fontWeight: 500, fontSize: 18 }}>
-              {localPromotion.color[0].toUpperCase() + localPromotion.color.slice(1)} pawn reached the end — choose promotion:
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', minHeight: 600, justifyContent: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <h2 style={{ marginBottom: 8 }}>Local Mode</h2>
+          <Popup message={popup} onClose={() => setPopup("")} />
+          {/* Turn/Achilles status */}
+          <div style={{
+            marginBottom: 12,
+            fontSize: 22,
+            fontWeight: 600,
+            color: needsAchilles ? (turnColor === 'white' ? '#c90' : '#09c') : '#333',
+            letterSpacing: 0.5,
+            textShadow: '0 1px 0 #fff, 0 2px 8px #0001',
+          }}>{statusMsg}</div>
+          {/* Promotion UI */}
+          {localPromotion ? (
+            <div style={{ marginBottom: 16, textAlign: 'center' }}>
+              <div style={{ marginBottom: 8, fontWeight: 500, fontSize: 18 }}>
+                {localPromotion.color[0].toUpperCase() + localPromotion.color.slice(1)} pawn reached the end — choose promotion:
+              </div>
+              {!localPromoChoice ? (
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 16 }}>
+                  <button onClick={() => handleLocalPromotion("discover")} style={buttonStyle}>Discover Opponent's Achilles</button>
+                  <button onClick={() => setLocalPromoChoice('change')} style={buttonStyle}>Change Your Achilles</button>
+                </div>
+              ) : localPromoChoice === 'change' ? (
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 12, alignItems: 'center' }}>
+                  <label style={{ fontWeight: 600 }}>Promote to:</label>
+                  <select value={localPromoNewType} onChange={(e) => setLocalPromoNewType(e.target.value)} style={{ fontSize: 16, padding: '6px 10px' }}>
+                    {['Queen','Rook','Bishop','Knight'].map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <button onClick={() => handleLocalPromotion('change', localPromoNewType)} style={buttonStyle}>Confirm</button>
+                  <button onClick={() => setLocalPromoChoice(null)} style={{ ...buttonStyle, background: '#999' }}>Cancel</button>
+                </div>
+              ) : null}
             </div>
-            {!localPromoChoice ? (
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 16 }}>
-                <button onClick={() => handleLocalPromotion("discover")} style={buttonStyle}>Discover Opponent's Achilles</button>
-                <button onClick={() => setLocalPromoChoice('change')} style={buttonStyle}>Change Your Achilles</button>
-              </div>
-            ) : localPromoChoice === 'change' ? (
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 12, alignItems: 'center' }}>
-                <label style={{ fontWeight: 600 }}>Promote to:</label>
-                <select value={localPromoNewType} onChange={(e) => setLocalPromoNewType(e.target.value)} style={{ fontSize: 16, padding: '6px 10px' }}>
-                  {['Queen','Rook','Bishop','Knight'].map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <button onClick={() => handleLocalPromotion('change', localPromoNewType)} style={buttonStyle}>Confirm</button>
-                <button onClick={() => setLocalPromoChoice(null)} style={{ ...buttonStyle, background: '#999' }}>Cancel</button>
-              </div>
-            ) : null}
+          ) : null}
+          {/* Toasts */}
+          <div style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 1200, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {toasts.map((t) => (
+              <div key={t.id} style={{ background: '#222', color: '#fff', padding: '10px 14px', borderRadius: 8, minWidth: 200, boxShadow: '0 6px 24px #0004' }}>{t.message}</div>
+            ))}
           </div>
-        ) : null}
-
-        {/* Toasts */}
-        <div style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 1200, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {toasts.map((t) => (
-            <div key={t.id} style={{ background: '#222', color: '#fff', padding: '10px 14px', borderRadius: 8, minWidth: 200, boxShadow: '0 6px 24px #0004' }}>{t.message}</div>
-          ))}
+          <ChessBoard
+            board={localGame.board}
+            onCellClick={handleCellClick}
+            selected={selected}
+            achilles={achilles}
+            patroclus={patroclus}
+          />
         </div>
-        <ChessBoard
-          board={localGame.board}
-          onCellClick={handleCellClick}
-          selected={selected}
-          achilles={achilles}
-          patroclus={patroclus}
-        />
-        {getMoveLog(localGame.moveLog)}
+        <div style={{ marginLeft: 32, minWidth: 260, maxWidth: 320 }}>{getMoveLog(localGame.moveLog)}</div>
       </div>
     );
   }
@@ -615,54 +638,56 @@ export default function ChessGame() {
     onlineStatusMsg = `${turnColor[0].toUpperCase() + turnColor.slice(1)}'s turn`;
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 600 }}>
-      <h2 style={{ marginBottom: 8 }}>Room: {roomCode}</h2>
-      <Popup message={popup} onClose={() => setPopup("")} />
-      {/* Turn/Achilles status */}
-      {onlineStatusMsg && (
-        <div style={{
-          marginBottom: 12,
-          fontSize: 22,
-          fontWeight: 600,
-          color: onlineStatusMsg.includes('White') ? '#c90' : onlineStatusMsg.includes('Black') ? '#09c' : '#333',
-          letterSpacing: 0.5,
-          textShadow: '0 1px 0 #fff, 0 2px 8px #0001',
-        }}>{onlineStatusMsg}</div>
-      )}
-      {/* Buttons above board, centered */}
-      {game?.promotion && game.promotion.color === myColor && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 16, alignItems: 'center' }}>
-          <button onClick={() => handlePromotion("discover")} style={buttonStyle}>Discover Achilles</button>
-          {!onlinePromoChoice ? (
-            <button onClick={() => setOnlinePromoChoice('change')} style={buttonStyle}>Change Achilles</button>
-          ) : (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <label style={{ fontWeight: 600 }}>Promote to:</label>
-              <select value={onlinePromoNewType} onChange={(e) => setOnlinePromoNewType(e.target.value)} style={{ fontSize: 16, padding: '6px 10px' }}>
-                {['Queen','Rook','Bishop','Knight'].map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <button onClick={() => handlePromotion('change', onlinePromoNewType)} style={buttonStyle}>Confirm</button>
-              <button onClick={() => setOnlinePromoChoice(null)} style={{ ...buttonStyle, background: '#999' }}>Cancel</button>
-            </div>
-          )}
+    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', minHeight: 600, justifyContent: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <h2 style={{ marginBottom: 8 }}>Room: {roomCode}</h2>
+        <Popup message={popup} onClose={() => setPopup("")} />
+        {/* Turn/Achilles status */}
+        {onlineStatusMsg && (
+          <div style={{
+            marginBottom: 12,
+            fontSize: 22,
+            fontWeight: 600,
+            color: onlineStatusMsg.includes('White') ? '#c90' : onlineStatusMsg.includes('Black') ? '#09c' : '#333',
+            letterSpacing: 0.5,
+            textShadow: '0 1px 0 #fff, 0 2px 8px #0001',
+          }}>{onlineStatusMsg}</div>
+        )}
+        {/* Promotion UI */}
+        {game?.promotion && game.promotion.color === myColor && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 16, alignItems: 'center' }}>
+            <button onClick={() => handlePromotion("discover")} style={buttonStyle}>Discover Achilles</button>
+            {!onlinePromoChoice ? (
+              <button onClick={() => setOnlinePromoChoice('change')} style={buttonStyle}>Change Achilles</button>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <label style={{ fontWeight: 600 }}>Promote to:</label>
+                <select value={onlinePromoNewType} onChange={(e) => setOnlinePromoNewType(e.target.value)} style={{ fontSize: 16, padding: '6px 10px' }}>
+                  {['Queen','Rook','Bishop','Knight'].map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <button onClick={() => handlePromotion('change', onlinePromoNewType)} style={buttonStyle}>Confirm</button>
+                <button onClick={() => setOnlinePromoChoice(null)} style={{ ...buttonStyle, background: '#999' }}>Cancel</button>
+              </div>
+            )}
+          </div>
+        )}
+        {/* Toasts */}
+        <div style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 1200, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {toasts.map((t) => (
+            <div key={t.id} style={{ background: '#222', color: '#fff', padding: '10px 14px', borderRadius: 8, minWidth: 200, boxShadow: '0 6px 24px #0004' }}>{t.message}</div>
+          ))}
         </div>
-      )}
-      {/* Toasts */}
-      <div style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 1200, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {toasts.map((t) => (
-          <div key={t.id} style={{ background: '#222', color: '#fff', padding: '10px 14px', borderRadius: 8, minWidth: 200, boxShadow: '0 6px 24px #0004' }}>{t.message}</div>
-        ))}
+        <ChessBoard
+          board={board}
+          onCellClick={handleCellClick}
+          selected={selected}
+          achilles={game?.achilles}
+          patroclus={game?.patroclus}
+          myColor={myColor}
+          revealedAchilles={game?.revealedAchilles}
+        />
       </div>
-      <ChessBoard
-        board={board}
-        onCellClick={handleCellClick}
-        selected={selected}
-        achilles={game?.achilles}
-        patroclus={game?.patroclus}
-        myColor={myColor}
-        revealedAchilles={game?.revealedAchilles}
-      />
-      {getMoveLog(game?.moveLog)}
+      <div style={{ marginLeft: 32, minWidth: 260, maxWidth: 320 }}>{getMoveLog(game?.moveLog)}</div>
     </div>
   );
 
