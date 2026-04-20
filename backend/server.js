@@ -1,5 +1,6 @@
-// Achilles Heel Chess WebSocket Server
+// Achilles Heel Chess — WebSocket Server
 // In-memory, room-based, for Render deployment
+
 import { WebSocketServer } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 import * as Engine from './achillesEngine.js';
@@ -7,16 +8,16 @@ import * as Engine from './achillesEngine.js';
 const PORT = process.env.PORT || 8080;
 const wss = new WebSocketServer({ port: PORT });
 
-
-// In-memory game state: { [roomCode]: { players: [], state } }
+// ─── In-memory rooms ─────────────────────────────────────────
+// { [roomCode]: { players: WebSocket[], state: GameState } }
 const rooms = {};
 
+// ─── Broadcast helpers ────────────────────────────────────────
 function broadcast(roomCode, msg) {
   const room = rooms[roomCode];
   if (!room) return;
-  room.players.forEach((p) => {
-    try { p.send(JSON.stringify(msg)); } catch (e) {}
-  });
+  const json = JSON.stringify(msg);
+  room.players.forEach((p) => { try { p.send(json); } catch (_) {} });
 }
 
 function sendSyncToAll(roomCode) {
@@ -24,140 +25,191 @@ function sendSyncToAll(roomCode) {
   if (!room) return;
   room.players.forEach((p, idx) => {
     const color = idx === 0 ? 'white' : 'black';
-    const sanitized = sanitizeGameStateForRecipient(room.state, color);
-    const playersMap = { white: room.players[0]?.id || null, black: room.players[1]?.id || null };
-    try { p.send(JSON.stringify({ type: 'sync', gameState: sanitized, myColor: color, players: playersMap })); } catch (e) {}
+    sendSyncTo(p, roomCode, color);
   });
 }
 
-function sendSyncTo(ws, roomCode) {
+function sendSyncTo(ws, roomCode, colorOverride) {
   const room = rooms[roomCode];
   if (!room) return;
-  const idx = room.players.indexOf(ws);
+  const idx  = colorOverride ? (colorOverride === 'white' ? 0 : 1) : room.players.indexOf(ws);
   const color = idx === 0 ? 'white' : 'black';
-  const sanitized = sanitizeGameStateForRecipient(room.state, color);
-  const playersMap = { white: room.players[0]?.id || null, black: room.players[1]?.id || null };
-  try { ws.send(JSON.stringify({ type: 'sync', gameState: sanitized, myColor: color, players: playersMap })); } catch (e) {}
+  const sanitized = sanitizeForPlayer(room.state, color);
+  const playersMap = {
+    white: room.players[0]?.id || null,
+    black: room.players[1]?.id || null,
+  };
+  try {
+    ws.send(JSON.stringify({ type: 'sync', gameState: sanitized, myColor: color, players: playersMap }));
+  } catch (_) {}
 }
 
-function sanitizeGameStateForRecipient(state, recipientColor) {
-  // Only include visible board, turn, winner, immortal booleans (no counters), and controlled achilles info.
-  const other = recipientColor === 'white' ? 'black' : 'white';
-  const out = {
-    board: state.board,
+// ─── Sanitize state for a specific player ────────────────────
+// Hidden-information rules:
+//  • Opponent Achilles ID/location are NEVER sent (unless revealed)
+//  • Opponent Patroclus is NEVER sent
+//  • immortalCountdown is NEVER sent (only boolean)
+//  • Piece IDs are stripped from the board before sending
+//    (IDs are an internal tracking mechanism; the client only
+//     needs type + color to render)
+function sanitizeForPlayer(state, recipientColor) {
+  const opp = recipientColor === 'white' ? 'black' : 'white';
+
+  // Strip IDs from every board piece so client gets clean objects
+  const board = state.board.map(row =>
+    row.map(cell => cell ? { type: cell.type, color: cell.color } : null)
+  );
+
+  // Achilles visibility
+  const achilles = { white: null, black: null };
+
+  // Own Achilles: send type only (the UI highlights it on the board by position)
+  if (state.achilles[recipientColor]) {
+    const a = state.achilles[recipientColor];
+    achilles[recipientColor] = { row: a.row, col: a.col, type: a.type };
+  }
+  // Opponent Achilles: only type if revealed (never location)
+  if (state.achilles[opp] && state.revealedAchilles[opp]) {
+    achilles[opp] = { type: state.achilles[opp].type };
+  }
+
+  // Patroclus: own only (row/col so UI can mark it)
+  const patroclus = { white: null, black: null };
+  if (state.patroclus[recipientColor]) {
+    const p = state.patroclus[recipientColor];
+    patroclus[recipientColor] = { row: p.row, col: p.col, type: p.type };
+  }
+
+  // Promotion info: only send to the player whose promotion it is
+  let promotion = null;
+  if (state.promotion && state.promotion.color === recipientColor) {
+    promotion = { row: state.promotion.row, col: state.promotion.col, color: state.promotion.color };
+  }
+
+  return {
+    board,
     turn: state.turn,
     winner: state.winner,
+    achilles,
+    patroclus,
     immortal: { white: !!state.immortal.white, black: !!state.immortal.black },
-    // do not include immortalCountdown
-    revealedAchilles: state.revealedAchilles || { white: false, black: false },
+    revealedAchilles: state.revealedAchilles,
+    promotion,
+    moveLog: state.moveLog || [],
   };
-
-  // Players mapping is intentionally omitted from gameState but sent separately in envelope
-
-  // Achilles: include full info for recipient's own Achilles, include only type for opponent if revealed
-  out.achilles = { white: null, black: null };
-  if (state.achilles && state.achilles[recipientColor]) {
-    out.achilles[recipientColor] = state.achilles[recipientColor];
-  }
-  if (state.achilles && state.achilles[other]) {
-    if (state.revealedAchilles && state.revealedAchilles[other]) {
-      // reveal only type, not location
-      out.achilles[other] = { type: state.achilles[other].type };
-    } else {
-      out.achilles[other] = null;
-    }
-  }
-
-  // Patroclus: include only for recipient's own Achilles (so UI can show mirror for their own)
-  out.patroclus = { white: null, black: null };
-  if (state.patroclus && state.patroclus[recipientColor]) out.patroclus[recipientColor] = state.patroclus[recipientColor];
-
-  // Move log can be included (optional), but keep it brief
-  out.moveLog = state.moveLog || [];
-  return out;
 }
 
-// (stray lines removed)
-
-
-
+// ─── WebSocket connection handler ─────────────────────────────
 wss.on('connection', (ws) => {
-  // assign an id to each websocket connection
   ws.id = uuidv4();
-  ws.on('message', (msg) => {
+
+  ws.on('message', (raw) => {
     let data;
-    try { data = JSON.parse(msg); } catch { return; }
+    try { data = JSON.parse(raw); } catch { return; }
+
     const { type, roomCode, payload } = data;
 
+    // ── Create room ──────────────────────────────────────────
     if (type === 'create-room') {
-      // Generate unique room code
       let code;
-      do { code = Math.random().toString(36).substr(2, 6).toUpperCase(); } while (rooms[code]);
+      do { code = Math.random().toString(36).substr(2, 6).toUpperCase(); }
+      while (rooms[code]);
+
       rooms[code] = { players: [ws], state: Engine.createInitialState() };
       ws.roomCode = code;
       ws.send(JSON.stringify({ type: 'room-created', roomCode: code }));
-      // send initial sync to creator with assigned color
-      sendSyncTo(ws, code);
+      sendSyncTo(ws, code, 'white');
+      return;
     }
-    else if (type === 'join-room') {
-      if (!rooms[roomCode] || rooms[roomCode].players.length >= 2) {
+
+    // ── Join room ────────────────────────────────────────────
+    if (type === 'join-room') {
+      const room = rooms[roomCode];
+      if (!room || room.players.length >= 2) {
         ws.send(JSON.stringify({ type: 'error', message: 'Room not found or full.' }));
         return;
       }
-      rooms[roomCode].players.push(ws);
+      room.players.push(ws);
       ws.roomCode = roomCode;
-      // Notify both players
       broadcast(roomCode, { type: 'player-joined', roomCode });
-      // Send full sync to both players (per-player myColor)
       sendSyncToAll(roomCode);
+      return;
     }
-    else if (type === 'move') {
-      // { from, to }
-      if (!rooms[roomCode]) return;
-      const { from, to } = payload;
+
+    // ── Choose Achilles ──────────────────────────────────────
+    if (type === 'choose-achilles') {
       const room = rooms[roomCode];
-      const playerIndex = room.players.indexOf(ws);
-      const color = playerIndex === 0 ? 'white' : 'black';
+      if (!room) return;
+      const color = room.players[0] === ws ? 'white' : 'black';
+      const { row, col } = payload;
+      room.state = Engine.setAchilles(room.state, color, row, col);
+      sendSyncToAll(roomCode);
+      return;
+    }
+
+    // ── Move ─────────────────────────────────────────────────
+    if (type === 'move') {
+      const room = rooms[roomCode];
+      if (!room) return;
+
       if (room.state.winner) {
         ws.send(JSON.stringify({ type: 'invalid-move', reason: 'Game already over' }));
         return;
       }
-      // validate move legality server-side
+
+      const { from, to } = payload;
+
+      // Pre-validate geometry before handing to engine
       if (!Engine.isValidMove(room.state.board, from, to)) {
         ws.send(JSON.stringify({ type: 'invalid-move', reason: 'Illegal move' }));
         return;
       }
-      rooms[roomCode].state = Engine.applyMove(rooms[roomCode].state, from, to);
+
+      room.state = Engine.applyMove(room.state, from, to);
       sendSyncToAll(roomCode);
+
+      if (room.state.winner) {
+        broadcast(roomCode, { type: 'game-over', winner: room.state.winner });
+      }
+      return;
     }
-    else if (type === 'choose-achilles') {
-      // { row, col }
-      if (!rooms[roomCode]) return;
-      const color = rooms[roomCode].players[0] === ws ? 'white' : 'black';
-      const { row, col } = payload;
-      rooms[roomCode].state = Engine.setAchilles(rooms[roomCode].state, color, row, col);
+
+    // ── Promotion ────────────────────────────────────────────
+    if (type === 'promotion') {
+      const room = rooms[roomCode];
+      if (!room || !room.state.promotion) return;
+
+      const color = room.players[0] === ws ? 'white' : 'black';
+
+      // Only the player whose promotion it is can resolve it
+      if (room.state.promotion.color !== color) return;
+
+      room.state = Engine.handlePromotion(room.state, color, payload.option, payload);
       sendSyncToAll(roomCode);
+      return;
     }
-    else if (type === 'promotion') {
-      // payload includes { option, row, col, newType? }
-      if (!rooms[roomCode]) return;
-      const color = rooms[roomCode].players[0] === ws ? 'white' : 'black';
-      rooms[roomCode].state = Engine.handlePromotion(rooms[roomCode].state, color, payload.option, payload);
-      sendSyncToAll(roomCode);
-    }
-    else if (type === 'request-state') {
+
+    // ── Request full state resync ─────────────────────────────
+    if (type === 'request-state') {
       if (!rooms[roomCode]) return;
       sendSyncTo(ws, roomCode);
+      return;
     }
   });
 
+  // ── Disconnect ───────────────────────────────────────────────
   ws.on('close', () => {
-    // Remove player from room
-    if (ws.roomCode && rooms[ws.roomCode]) {
-      rooms[ws.roomCode].players = rooms[ws.roomCode].players.filter(p => p !== ws);
-      if (rooms[ws.roomCode].players.length === 0) delete rooms[ws.roomCode];
+    const code = ws.roomCode;
+    if (code && rooms[code]) {
+      rooms[code].players = rooms[code].players.filter(p => p !== ws);
+      if (rooms[code].players.length === 0) {
+        delete rooms[code];
+      } else {
+        // Notify remaining player
+        broadcast(code, { type: 'opponent-disconnected' });
+      }
     }
   });
 });
 
-console.log(`WebSocket server running on port ${PORT}`);
+console.log(`Achilles Heel Chess server running on port ${PORT}`);

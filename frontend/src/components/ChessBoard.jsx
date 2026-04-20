@@ -37,7 +37,7 @@ export default function ChessBoard({ board, onCellClick, selected, achilles, pat
   const files = ['a','b','c','d','e','f','g','h'];
   const ranks = [8,7,6,5,4,3,2,1];
   return (
-    <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', margin: '0 auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', margin: '0 auto', width: '100%', maxWidth: '100vw', maxHeight: '100vh', overflow: 'auto' }}>
       {/* Rank labels */}
       <div style={{ display: 'flex', flexDirection: 'column', userSelect: 'none' }}>
         {ranks.map((rank, i) => (
@@ -55,6 +55,11 @@ export default function ChessBoard({ board, onCellClick, selected, achilles, pat
         height: SQUARE_SIZE * 8,
         boxShadow: '0 4px 24px #0003',
         position: 'relative',
+        maxWidth: '100vw',
+        maxHeight: '100vh',
+        minWidth: 0,
+        minHeight: 0,
+        overflow: 'auto',
       }}>
         {board.map((row, r) =>
           row.map((cell, c) => {
