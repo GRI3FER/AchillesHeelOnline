@@ -1,105 +1,198 @@
-import React from "react";
-import PieceSprite from "./PieceSprite";
+import React from 'react';
 
-export default function ChessBoard({ board, onCellClick, selected, achilles, patroclus, myColor, revealedAchilles }) {
-  // Helper to check if a square is Achilles or Patroclus for the current player
-  function isAchillesSquare(r, c) {
-    if (!achilles || !myColor) return false;
+// Piece unicode symbols
+const SYMBOLS = {
+  white: { Pawn:'♙', Rook:'♖', Knight:'♘', Bishop:'♗', Queen:'♕' },
+  black: { Pawn:'♟', Rook:'♜', Knight:'♞', Bishop:'♝', Queen:'♛' },
+};
+
+const FILES = ['a','b','c','d','e','f','g','h'];
+const RANKS = [8,7,6,5,4,3,2,1];
+
+export default function ChessBoard({
+  board,
+  onCellClick,
+  selected,
+  legalMoves = [],
+  achilles,
+  patroclus,
+  myColor,
+  revealedAchilles,
+  immortal,
+  flipped = false,
+  hideMarkers = false,
+}) {
+  const S = 72;
+
+  function isMyAchilles(r, c) {
+    if (hideMarkers || !achilles || !myColor) return false;
     const a = achilles[myColor];
-    const piece = board[r][c];
-    if (!a || !piece) return false;
-    if (a.id && piece.id) return a.id === piece.id;
-    return a.row === r && a.col === c;
+    return a && a.row === r && a.col === c;
   }
-  function isPatroclusSquare(r, c) {
-    if (!patroclus || !myColor) return false;
+  function isMyPatroclus(r, c) {
+    if (hideMarkers || !patroclus || !myColor) return false;
     const p = patroclus[myColor];
-    const piece = board[r][c];
-    if (!p || !piece) return false;
-    if (p.id && piece.id) return p.id === piece.id;
-    return p.row === r && p.col === c;
+    return p && p.row === r && p.col === c;
   }
-  // Optionally highlight revealed opponent Achilles
-  function isOpponentAchillesSquare(r, c) {
-    if (!achilles || !myColor || !revealedAchilles) return false;
-    const opp = myColor === "white" ? "black" : "white";
+  function isRevealedOppAchilles(r, c) {
+    if (hideMarkers || !achilles || !myColor || !revealedAchilles) return false;
+    const opp = myColor === 'white' ? 'black' : 'white';
     if (!revealedAchilles[opp]) return false;
     const a = achilles[opp];
     return a && a.row === r && a.col === c;
   }
-  // Larger board and pieces
-  const SQUARE_SIZE = 72;
-  const PIECE_SIZE = 60;
-  // Classic chessboard colors
-  const LIGHT = '#f0d9b5';
-  const DARK = '#b58863';
-  // Chessboard coordinates
-  const files = ['a','b','c','d','e','f','g','h'];
-  const ranks = [8,7,6,5,4,3,2,1];
+  function isLegal(r, c) {
+    return legalMoves.some(([lr, lc]) => lr === r && lc === c);
+  }
+
+  // Board array: row 0 = black back rank (rank 8), row 7 = white back rank (rank 1)
+  // flipped=false (white POV): iterate rows 0..7 top-to-bottom → black at top, white at bottom ✓
+  // flipped=true  (black POV): iterate rows 7..0 top-to-bottom → white at top, black at bottom ✓
+  const rows = flipped ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
+  const cols = flipped ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
+
+  // Rank number beside each row: row 0 → rank 8, row 7 → rank 1
+  function rankLabel(rowIdx) { return 8 - rowIdx; }
+  // Bottom-most rendered row (for file label overlay)
+  const bottomRenderedRow = rows[rows.length - 1];
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', margin: '0 auto', width: '100%', maxWidth: '100vw', maxHeight: '100vh', overflow: 'auto' }}>
+    <div style={{ display: 'flex', gap: 0 }}>
       {/* Rank labels */}
-      <div style={{ display: 'flex', flexDirection: 'column', userSelect: 'none' }}>
-        {ranks.map((rank, i) => (
-          <div key={rank} style={{ height: SQUARE_SIZE, width: 20, textAlign: 'right', lineHeight: SQUARE_SIZE + 'px', fontWeight: 600, color: '#333', fontSize: 18 }}>{rank}</div>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {rows.map(rowIdx => (
+          <div key={rowIdx} style={{
+            width: 24, height: S, display: 'flex', alignItems: 'center',
+            justifyContent: 'flex-end', paddingRight: 6,
+            fontSize: 13, fontWeight: 700, color: 'var(--label-color, #8a7a5a)',
+            fontFamily: 'Georgia, serif', userSelect: 'none',
+          }}>
+            {rankLabel(rowIdx)}
+          </div>
         ))}
       </div>
-      {/* Board grid */}
-      <div style={{
-        display: "grid",
-        gridTemplateRows: `repeat(8, ${SQUARE_SIZE}px)`,
-        gridTemplateColumns: `repeat(8, ${SQUARE_SIZE}px)`,
-        border: "4px solid #333",
-        background: DARK,
-        width: SQUARE_SIZE * 8,
-        height: SQUARE_SIZE * 8,
-        boxShadow: '0 4px 24px #0003',
-        position: 'relative',
-        maxWidth: '100vw',
-        maxHeight: '100vh',
-        minWidth: 0,
-        minHeight: 0,
-        overflow: 'auto',
-      }}>
-        {board.map((row, r) =>
-          row.map((cell, c) => {
-            const isSelected = selected && selected[0] === r && selected[1] === c;
-            let bg = (r + c) % 2 === 0 ? LIGHT : DARK;
-            if (isSelected) bg = "#3c6";
-            const ach = isAchillesSquare(r, c);
-            const pat = isPatroclusSquare(r, c);
-            const oppAch = isOpponentAchillesSquare(r, c);
-            if (ach) bg = "#ffec8b";
-            else if (pat) bg = "#b4e7ff";
-            else if (oppAch) bg = "#ffb3b3";
-            return (
-              <div
-                key={r + "-" + c}
-                onClick={() => onCellClick(r, c)}
-                style={{
-                  width: SQUARE_SIZE,
-                  height: SQUARE_SIZE,
-                  background: bg,
-                  border: "1px solid #333",
-                  boxShadow: undefined,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  position: "relative",
-                  transition: 'background 0.15s, border 0.15s, box-shadow 0.15s',
-                  fontSize: 18,
-                }}
-              >
-                {cell && <PieceSprite color={cell.color} type={cell.type} size={PIECE_SIZE} />}
-                {ach ? <div style={{ position: 'absolute', top: 4, right: 4, fontSize: 20, color: '#c90', fontWeight: 'bold' }}>A</div> : null}
-                {pat ? <div style={{ position: 'absolute', top: 4, left: 4, fontSize: 20, color: '#09c', fontWeight: 'bold' }}>P</div> : null}
-                {oppAch ? <div style={{ position: 'absolute', bottom: 4, right: 4, fontSize: 20, color: '#c33', fontWeight: 'bold' }}>?</div> : null}
-                {/* File label in bottom row */}
-                {r === 7 && <div style={{ position: 'absolute', bottom: 2, left: 4, fontSize: 15, color: '#333', opacity: 0.7 }}>{files[c]}</div>}
-              </div>
-            );
-          })
-        )}
+
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {/* Board grid */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(8, ${S}px)`,
+          gridTemplateRows: `repeat(8, ${S}px)`,
+          border: '3px solid #5c4a2a',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,220,140,0.15)',
+        }}>
+          {rows.map(r =>
+            cols.map(c => {
+              const isLight = (r + c) % 2 === 0;
+              const isSelected = selected && selected[0] === r && selected[1] === c;
+              const legal = isLegal(r, c);
+              const ach   = isMyAchilles(r, c);
+              const pat   = isMyPatroclus(r, c);
+              const oAch  = isRevealedOppAchilles(r, c);
+              const cell  = board?.[r]?.[c];
+
+              let bg = isLight ? '#f0d9b5' : '#b58863';
+              if (isSelected)                bg = isLight ? '#7fc97f' : '#5aaa5a';
+              else if (ach && !hideMarkers)  bg = isLight ? '#ffe066' : '#d4a800';
+              else if (pat && !hideMarkers)  bg = isLight ? '#82d4f5' : '#4fa8d6';
+              else if (oAch && !hideMarkers) bg = isLight ? '#ff9999' : '#cc5555';
+              else if (legal && cell)        bg = isLight ? '#e8c060' : '#c09830';
+
+              return (
+                <div
+                  key={`${r}-${c}`}
+                  onClick={() => onCellClick(r, c)}
+                  style={{
+                    width: S, height: S, background: bg,
+                    position: 'relative',
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'background 0.12s',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  {/* Legal move dot */}
+                  {legal && !cell && (
+                    <div style={{
+                      width: 22, height: 22, borderRadius: '50%',
+                      background: 'rgba(0,0,0,0.22)',
+                      position: 'absolute',
+                    }} />
+                  )}
+                  {/* Piece */}
+                  {cell && (
+                    <span style={{
+                      fontSize: 46,
+                      lineHeight: 1,
+                      userSelect: 'none',
+                      color: cell.color === 'white' ? '#fff' : '#1a1108',
+                      textShadow: cell.color === 'white'
+                        ? '0 0 3px #555, 0 1px 3px #000'
+                        : '0 0 3px rgba(255,255,255,0.3)',
+                      filter: immortal?.[cell.color] && (ach || oAch)
+                        ? 'drop-shadow(0 0 8px gold)'
+                        : 'none',
+                      transition: 'filter 0.3s',
+                    }}>
+                      {SYMBOLS[cell.color]?.[cell.type] || '?'}
+                    </span>
+                  )}
+                  {/* Achilles marker — only shown when not hidden (online/post-game) */}
+                  {ach && !hideMarkers && (
+                    <span style={{
+                      position: 'absolute', top: 2, right: 3,
+                      fontSize: 11, fontWeight: 900, color: '#b8860b',
+                      fontFamily: 'Georgia, serif',
+                      textShadow: '0 0 2px #fff',
+                    }}>A</span>
+                  )}
+                  {/* Patroclus marker */}
+                  {pat && !hideMarkers && (
+                    <span style={{
+                      position: 'absolute', top: 2, left: 3,
+                      fontSize: 11, fontWeight: 900, color: '#1a6896',
+                      fontFamily: 'Georgia, serif',
+                      textShadow: '0 0 2px #fff',
+                    }}>P</span>
+                  )}
+                  {/* Revealed opponent Achilles */}
+                  {oAch && !hideMarkers && (
+                    <span style={{
+                      position: 'absolute', bottom: 2, right: 3,
+                      fontSize: 11, fontWeight: 900, color: '#8b0000',
+                      fontFamily: 'Georgia, serif',
+                    }}>!</span>
+                  )}
+                  {/* File label on bottom-most rendered row */}
+                  {r === bottomRenderedRow && (
+                    <span style={{
+                      position: 'absolute', bottom: 2, left: 3,
+                      fontSize: 11, color: isLight ? '#b58863' : '#f0d9b5',
+                      fontFamily: 'Georgia, serif', fontWeight: 700,
+                      userSelect: 'none', opacity: 0.85,
+                    }}>
+                      {FILES[c]}
+                    </span>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* File labels */}
+        <div style={{ display: 'flex', paddingLeft: 0 }}>
+          {cols.map(c => (
+            <div key={c} style={{
+              width: S, height: 22, display: 'flex', alignItems: 'center',
+              justifyContent: 'center', fontSize: 13, fontWeight: 700,
+              color: 'var(--label-color, #8a7a5a)',
+              fontFamily: 'Georgia, serif', userSelect: 'none',
+            }}>
+              {FILES[c]}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
