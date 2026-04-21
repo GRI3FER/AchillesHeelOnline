@@ -2,9 +2,10 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ChessBoard from './ChessBoard';
 
 // ─── Constants ────────────────────────────────────────────────
-const WS_URL = window.location.hostname === 'localhost'
-  ? 'ws://localhost:8080'
-  : 'wss://achillesheelonline.onrender.com';
+const WS_URL =
+  window.location.hostname === 'localhost'
+    ? 'ws://localhost:3000'
+    : `wss://${window.location.host}`;
 
 const PIECE_TYPES = ['Queen', 'Rook', 'Bishop', 'Knight'];
 
