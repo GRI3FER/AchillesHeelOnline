@@ -1,3 +1,5 @@
+# File: frontend/src/assets/pieces/README.txt
+# Path: AchillesHeelOnline/frontend/src/assets/pieces/README.txt
 Place chess piece sprites in this folder. Naming convention:
 
 - white_pawn.png

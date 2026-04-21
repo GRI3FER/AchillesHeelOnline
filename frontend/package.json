@@ -4,15 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "node node_modules/vite/bin/vite.js build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "express": "^5.2.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "@vitejs/plugin-react": "^4.3.0"
   }
 }

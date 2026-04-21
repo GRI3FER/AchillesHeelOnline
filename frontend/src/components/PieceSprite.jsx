@@ -1,3 +1,5 @@
+// File: frontend/src/components/PieceSprite.jsx
+// Path: AchillesHeelOnline/frontend/src/components/PieceSprite.jsx
 import React from "react";
 import { pieceSprites } from "../assets/pieces/pieceSprites";
 

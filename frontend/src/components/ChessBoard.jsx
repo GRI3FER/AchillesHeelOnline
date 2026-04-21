@@ -1,3 +1,5 @@
+// File: frontend/src/components/ChessBoard.jsx
+// Path: AchillesHeelOnline/frontend/src/components/ChessBoard.jsx
 import React from 'react';
 
 const SYMBOLS = {

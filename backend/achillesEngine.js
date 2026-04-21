@@ -1,3 +1,5 @@
+// File: backend/achillesEngine.js
+// Path: AchillesHeelOnline/backend/achillesEngine.js
 // ============================================================
 // Achilles Heel Chess — Authoritative Game Engine
 // ============================================================

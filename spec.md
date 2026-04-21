@@ -1,3 +1,5 @@
+# File: spec.md
+# Path: AchillesHeelOnline/spec.md
 Chess: Achilles Heel — Multiplayer Web Spec
 1. Overview
 

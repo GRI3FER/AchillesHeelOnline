@@ -1,3 +1,5 @@
+// File: frontend/src/App.jsx
+// Path: AchillesHeelOnline/frontend/src/App.jsx
 import React, { useState } from 'react';
 import ChessGame from './components/ChessGame';
 

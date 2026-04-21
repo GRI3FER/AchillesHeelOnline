@@ -1,3 +1,5 @@
+// File: frontend/src/assets/pieces/pieceSprites.js
+// Path: AchillesHeelOnline/frontend/src/assets/pieces/pieceSprites.js
 // This file maps piece types to sprite image imports
 // Place PNG or SVG files in this folder with the correct names
 
