@@ -5,9 +5,10 @@ import ChessBoard from './ChessBoard';
 
 // ─── Constants ────────────────────────────────────────────────
 const WS_URL =
-  window.location.hostname === 'localhost'
-    ? 'ws://localhost:3000'
-    : 'wss://achillesheelonline.onrender.com';
+  import.meta.env.VITE_WS_URL ||
+  (window.location.hostname === 'localhost'
+    ? 'ws://localhost:10000'
+    : 'wss://achillesheelonline.onrender.com');
 
 const PIECE_TYPES = ['Queen', 'Rook', 'Bishop', 'Knight'];
 
