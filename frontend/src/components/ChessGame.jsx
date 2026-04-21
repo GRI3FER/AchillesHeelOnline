@@ -5,7 +5,7 @@ import ChessBoard from './ChessBoard';
 const WS_URL =
   window.location.hostname === 'localhost'
     ? 'ws://localhost:3000'
-    : `wss://${window.location.host}`;
+    : 'wss://achillesheelonline.onrender.com';
 
 const PIECE_TYPES = ['Queen', 'Rook', 'Bishop', 'Knight'];
 
