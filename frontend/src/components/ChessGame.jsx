@@ -4,7 +4,7 @@ import ChessBoard from './ChessBoard';
 // ─── Constants ────────────────────────────────────────────────
 const WS_URL = window.location.hostname === 'localhost'
   ? 'ws://localhost:8080'
-  : 'wss://achilles-heel-chess.onrender.com';
+  : 'wss://achillesheelonline.onrender.com';
 
 const PIECE_TYPES = ['Queen', 'Rook', 'Bishop', 'Knight'];
 
