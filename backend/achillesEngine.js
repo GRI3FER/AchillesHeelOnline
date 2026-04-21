@@ -384,3 +384,12 @@ export function getLegalMoves(board, row, col) {
         moves.push([r, c]);
   return moves;
 }
+
+export default {
+  createInitialState,
+  applyMove,
+  setAchilles,
+  handlePromotion,
+  isValidMove,
+  getLegalMoves
+};
