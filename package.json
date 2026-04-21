@@ -1,14 +1,16 @@
 
 {
-  "name": "achilles-backend",
+  "name": "achilles-heel-online",
   "version": "1.0.0",
   "type": "module",
-  "main": "backend/server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node backend/server.js"
   },
   "dependencies": {
     "express": "^5.2.1",
-    "ws": "^8.20.0"
+    "ws": "^8.18.0"
   }
 }

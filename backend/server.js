@@ -1,3 +1,7 @@
+// Heartbeat interval for Render stability
+setInterval(() => {
+  console.log("heartbeat", Date.now());
+}, 30000);
 import http from "http";
 import express from "express";
 import { WebSocketServer } from "ws";
