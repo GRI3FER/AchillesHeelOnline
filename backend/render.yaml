@@ -4,9 +4,6 @@ services:
     env: node
     plan: free
     buildCommand: npm install
-    startCommand: npm start
-    envVars:
-      - key: PORT
-        value: 8080
+    startCommand: node backend/server.js
     autoDeploy: true
     healthCheckPath: /
