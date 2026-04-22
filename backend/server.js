@@ -1,7 +1,3 @@
-// Heartbeat interval for Render stability
-setInterval(() => {
-  console.log("heartbeat", Date.now());
-}, 30000);
 import http from "http";
 import express from "express";
 import { WebSocketServer } from "ws";
@@ -11,17 +7,39 @@ const PORT = process.env.PORT || 10000;
 
 const app = express();
 
+// ───────────────────────────────
+// BASIC ROUTE
+// ───────────────────────────────
 app.get("/", (req, res) => {
   res.status(200).send("⚔ Achilles Heel backend running");
 });
 
-const server = app.listen(PORT);
+// ───────────────────────────────
+// CREATE HTTP SERVER (IMPORTANT)
+// ───────────────────────────────
+const server = http.createServer(app);
+
+// ONLY ONE LISTEN CALL (FIX)
+server.listen(PORT, "0.0.0.0", () => {
+  console.log("⚔ Achilles Backend Running on", PORT);
+});
+
+// ───────────────────────────────
+// WEBSOCKET SERVER
+// ───────────────────────────────
 const wss = new WebSocketServer({ server });
+
+// ───────────────────────────────
+// HEARTBEAT (Render keep-alive)
+// ───────────────────────────────
+setInterval(() => {
+  console.log("heartbeat", Date.now());
+}, 30000);
 
 // ───────────────────────────────
 // ROOM STORAGE
 // ───────────────────────────────
-const rooms = new Map(); // roomCode → gameState
+const rooms = new Map();
 
 function getRoom(code) {
   if (!code) return null;
@@ -39,10 +57,7 @@ function broadcastRoom(code, data) {
   const msg = JSON.stringify(data);
 
   wss.clients.forEach((client) => {
-    if (
-      client.readyState === 1 &&
-      client.roomCode === code
-    ) {
+    if (client.readyState === 1 && client.roomCode === code) {
       client.send(msg);
     }
   });
@@ -57,7 +72,7 @@ wss.on("connection", (ws) => {
   ws.send(JSON.stringify({
     type: "sync",
     gameState: {
-      board: initialBoard?.() || [],
+      board: engine.createInitialState(),
       turn: 0,
       achilles: { white: null, black: null },
       patroclus: { white: null, black: null },
@@ -69,33 +84,26 @@ wss.on("connection", (ws) => {
     myColor: "white"
   }));
 
-
   ws.on("message", (msg) => {
     try {
       const data = JSON.parse(msg.toString());
       const { type } = data;
 
-      // Always prefer explicit roomCode from payload
       const roomCode = data.roomCode || ws.roomCode;
-
       if (roomCode) ws.roomCode = roomCode;
 
       let state = getRoom(ws.roomCode);
       if (!state) return;
 
-      // ───────────────── ROOM MGMT ─────────────────
+      // ───────── ROOM MGMT ─────────
 
       if (type === "create-room") {
-        const code = Math.random()
-          .toString(36)
-          .slice(2, 8)
-          .toUpperCase();
+        const code = Math.random().toString(36).slice(2, 8).toUpperCase();
 
         ws.roomCode = code;
         ws.color = "white";
 
         setRoom(code, engine.createInitialState());
-        state = getRoom(code);
 
         ws.send(JSON.stringify({
           type: "room-created",
@@ -104,7 +112,7 @@ wss.on("connection", (ws) => {
 
         ws.send(JSON.stringify({
           type: "sync",
-          gameState: state,
+          gameState: getRoom(code),
           myColor: "white"
         }));
 
@@ -125,30 +133,19 @@ wss.on("connection", (ws) => {
           myColor: "black"
         }));
 
-        broadcastRoom(code, {
-          type: "player-joined"
-        });
+        broadcastRoom(code, { type: "player-joined" });
 
         return;
       }
 
-      // ───────────────── GAME ACTIONS ─────────────────
+      // ───────── GAME ACTIONS ─────────
 
       if (type === "choose-achilles") {
-        state = engine.setAchilles(
-          state,
-          ws.color,
-          data.row,
-          data.col
-        );
+        state = engine.setAchilles(state, ws.color, data.row, data.col);
       }
 
       if (type === "move") {
-        state = engine.applyMove(
-          state,
-          data.from,
-          data.to
-        );
+        state = engine.applyMove(state, data.from, data.to);
       }
 
       if (type === "promotion") {
@@ -162,10 +159,8 @@ wss.on("connection", (ws) => {
         );
       }
 
-      // Save updated state
       setRoom(ws.roomCode, state);
 
-      // Broadcast ONLY to that room
       broadcastRoom(ws.roomCode, {
         type: "sync",
         gameState: state
@@ -173,15 +168,10 @@ wss.on("connection", (ws) => {
 
     } catch (err) {
       console.error("WS ERROR:", err);
-
       ws.send(JSON.stringify({
         type: "error",
         message: "Invalid message"
       }));
     }
   });
-});
-
-server.listen(PORT, () => {
-  console.log("⚔ Achilles Backend Running on", PORT);
 });
