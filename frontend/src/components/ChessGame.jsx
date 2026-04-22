@@ -9,7 +9,7 @@ const WS_URL =
   (window.location.hostname === 'localhost'
     ? 'ws://localhost:10000'
     : 'wss://achillesheelonline.onrender.com');
-
+    
 function safeSend(ws, data) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return false;
   ws.send(JSON.stringify(data));

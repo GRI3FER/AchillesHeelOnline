@@ -15,7 +15,7 @@ app.get("/", (req, res) => {
   res.status(200).send("⚔ Achilles Heel backend running");
 });
 
-const server = http.createServer(app);
+const server = app.listen(PORT);
 const wss = new WebSocketServer({ server });
 
 // ───────────────────────────────
@@ -52,8 +52,23 @@ function broadcastRoom(code, data) {
 // CONNECTION HANDLER
 // ───────────────────────────────
 wss.on("connection", (ws) => {
-  ws.roomCode = null;
-  ws.color = null;
+  console.log("CLIENT CONNECTED");
+
+  ws.send(JSON.stringify({
+    type: "sync",
+    gameState: {
+      board: initialBoard?.() || [],
+      turn: 0,
+      achilles: { white: null, black: null },
+      patroclus: { white: null, black: null },
+      immortal: { white: false, black: false },
+      immortalCountdown: { white: 0, black: 0 },
+      revealedAchilles: { white: false, black: false },
+      moveLog: []
+    },
+    myColor: "white"
+  }));
+});
 
   ws.on("message", (msg) => {
     try {
