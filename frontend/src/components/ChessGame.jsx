@@ -1031,7 +1031,9 @@ function Lobby({ onLocalPlay, onEnterGame }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get('room');
-    if (code?.length >= 4) joinRoom(code.toUpperCase());
+    if (code?.length >= 4) {
+  setTimeout(() => joinRoom(code.toUpperCase()), 50);
+  }
   }, []);
 
   function connect(onOpen) {
@@ -1083,10 +1085,14 @@ function Lobby({ onLocalPlay, onEnterGame }) {
   }
 
   function copyLink() {
-    navigator.clipboard.writeText(shareLink).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+  navigator.clipboard.writeText(shareLink).then(() => {
+    setCopied(true);
+
+    // 🚨 THIS is the key change
+    window.location.href = shareLink;
+
+    setTimeout(() => setCopied(false), 2000);
+  });
   }
 
   return (
@@ -1161,8 +1167,11 @@ function Lobby({ onLocalPlay, onEnterGame }) {
 
 // ─── Root ─────────────────────────────────────────────────────
 export default function ChessGame() {
-  const [screen, setScreen] = useState('lobby'); // 'lobby' | 'local' | 'online'
+  const [screen, setScreen] = useState(
+  initialRoom ? 'online' : 'lobby'
+  );
   const [onlineProps, setOnlineProps] = useState(null);
+  const initialRoom = new URLSearchParams(window.location.search).get('room');
 
   // Handle browser back button
   useEffect(() => {
@@ -1176,6 +1185,15 @@ export default function ChessGame() {
     window.addEventListener('popstate', handlePop);
     return () => window.removeEventListener('popstate', handlePop);
   }, [screen]);
+
+  useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('room');
+
+  if (code && onlineProps) {
+    setScreen('online');
+  }
+  }, [onlineProps]);
 
   function enterOnlineGame(props) {
     setOnlineProps(props);
