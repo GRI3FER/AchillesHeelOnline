@@ -2,6 +2,9 @@
   "name": "achilles-heel-frontend",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -14,8 +17,5 @@
   "devDependencies": {
     "vite": "^5.4.21",
     "@vitejs/plugin-react": "^4.2.1"
-  },
-  "engines": {
-  "node": "18.x"
   }
 }
