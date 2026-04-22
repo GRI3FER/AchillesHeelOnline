@@ -7,50 +7,45 @@ const PORT = process.env.PORT || 10000;
 
 const app = express();
 
-// ───────────────────────────────
-// BASIC ROUTE
-// ───────────────────────────────
 app.get("/", (req, res) => {
   res.status(200).send("⚔ Achilles Heel backend running");
 });
 
-// ───────────────────────────────
-// CREATE HTTP SERVER (IMPORTANT)
-// ───────────────────────────────
+// IMPORTANT: single HTTP server
 const server = http.createServer(app);
-
-// ONLY ONE LISTEN CALL (FIX)
 server.listen(PORT, "0.0.0.0", () => {
   console.log("⚔ Achilles Backend Running on", PORT);
 });
 
-// ───────────────────────────────
-// WEBSOCKET SERVER
-// ───────────────────────────────
 const wss = new WebSocketServer({ server });
-
-// ───────────────────────────────
-// HEARTBEAT (Render keep-alive)
-// ───────────────────────────────
-setInterval(() => {
-  console.log("heartbeat", Date.now());
-}, 30000);
 
 // ───────────────────────────────
 // ROOM STORAGE
 // ───────────────────────────────
 const rooms = new Map();
 
-function getRoom(code) {
-  if (!code) return null;
-  if (!rooms.has(code)) {
-    rooms.set(code, engine.createInitialState());
-  }
-  return rooms.get(code);
+// ───────────────────────────────
+// HELPERS
+// ───────────────────────────────
+function createRoomCode() {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
 
-function setRoom(code, state) {
-  rooms.set(code, state);
+function getRoom(code) {
+  return rooms.get(code) || null;
+}
+
+function createRoom() {
+  const code = createRoomCode();
+
+  const state = engine.createInitialState();
+
+  rooms.set(code, {
+    state,
+    players: 0,
+  });
+
+  return code;
 }
 
 function broadcastRoom(code, data) {
@@ -64,23 +59,15 @@ function broadcastRoom(code, data) {
 }
 
 // ───────────────────────────────
-// CONNECTION HANDLER
+// WS CONNECTION
 // ───────────────────────────────
 wss.on("connection", (ws) => {
   console.log("CLIENT CONNECTED");
 
+  // default sync (no room yet)
   ws.send(JSON.stringify({
     type: "sync",
-    gameState: {
-      board: engine.createInitialState(),
-      turn: 0,
-      achilles: { white: null, black: null },
-      patroclus: { white: null, black: null },
-      immortal: { white: false, black: false },
-      immortalCountdown: { white: 0, black: 0 },
-      revealedAchilles: { white: false, black: false },
-      moveLog: []
-    },
+    gameState: engine.createInitialState(),
     myColor: "white"
   }));
 
@@ -89,21 +76,16 @@ wss.on("connection", (ws) => {
       const data = JSON.parse(msg.toString());
       const { type } = data;
 
-      const roomCode = data.roomCode || ws.roomCode;
-      if (roomCode) ws.roomCode = roomCode;
-
-      let state = getRoom(ws.roomCode);
-      if (!state) return;
-
-      // ───────── ROOM MGMT ─────────
-
+      // ───────────────────────────────
+      // CREATE ROOM
+      // ───────────────────────────────
       if (type === "create-room") {
-        const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+        const code = createRoom();
 
         ws.roomCode = code;
         ws.color = "white";
 
-        setRoom(code, engine.createInitialState());
+        const room = getRoom(code);
 
         ws.send(JSON.stringify({
           type: "room-created",
@@ -112,25 +94,37 @@ wss.on("connection", (ws) => {
 
         ws.send(JSON.stringify({
           type: "sync",
-          gameState: getRoom(code),
+          gameState: room.state,
           myColor: "white"
         }));
 
         return;
       }
 
+      // ───────────────────────────────
+      // JOIN ROOM
+      // ───────────────────────────────
       if (type === "join-room") {
-        const code = data.roomCode;
+        const code = data.roomCode?.toUpperCase();
+
+        const room = getRoom(code);
+        if (!room) {
+          ws.send(JSON.stringify({
+            type: "error",
+            message: "Room not found"
+          }));
+          return;
+        }
 
         ws.roomCode = code;
-        ws.color = "black";
+        ws.color = room.players === 0 ? "white" : "black";
 
-        state = getRoom(code);
+        room.players++;
 
         ws.send(JSON.stringify({
           type: "sync",
-          gameState: state,
-          myColor: "black"
+          gameState: room.state,
+          myColor: ws.color
         }));
 
         broadcastRoom(code, { type: "player-joined" });
@@ -138,7 +132,13 @@ wss.on("connection", (ws) => {
         return;
       }
 
-      // ───────── GAME ACTIONS ─────────
+      // ───────────────────────────────
+      // GAME ACTIONS
+      // ───────────────────────────────
+      const room = getRoom(ws.roomCode);
+      if (!room) return;
+
+      let state = room.state;
 
       if (type === "choose-achilles") {
         state = engine.setAchilles(state, ws.color, data.row, data.col);
@@ -159,7 +159,7 @@ wss.on("connection", (ws) => {
         );
       }
 
-      setRoom(ws.roomCode, state);
+      room.state = state;
 
       broadcastRoom(ws.roomCode, {
         type: "sync",
@@ -168,6 +168,7 @@ wss.on("connection", (ws) => {
 
     } catch (err) {
       console.error("WS ERROR:", err);
+
       ws.send(JSON.stringify({
         type: "error",
         message: "Invalid message"
