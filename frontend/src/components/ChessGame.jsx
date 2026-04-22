@@ -10,6 +10,12 @@ const WS_URL =
     ? 'ws://localhost:10000'
     : 'wss://achillesheelonline.onrender.com');
 
+function safeSend(ws, data) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+  ws.send(JSON.stringify(data));
+  return true;
+}
+
 const PIECE_TYPES = ['Queen', 'Rook', 'Bishop', 'Knight'];
 
 // ─── Local engine ──────────────────────────────────────────────
