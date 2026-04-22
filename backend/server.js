@@ -68,7 +68,7 @@ wss.on("connection", (ws) => {
     },
     myColor: "white"
   }));
-});
+
 
   ws.on("message", (msg) => {
     try {
