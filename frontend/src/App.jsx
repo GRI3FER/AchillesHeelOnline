@@ -41,37 +41,32 @@ export default function App() {
         background: '#0e0a03',
         overflowX: 'hidden', overflowY: 'auto',
       }}>
-        {/* Top bar */}
+        {/* Top header */}
         <div style={{
-          padding: '10px 24px',
-          borderBottom: '1px solid #2a1e08',
-          display: 'flex', alignItems: 'center', gap: 12,
+          width: '100%',
           background: 'linear-gradient(90deg,rgba(14,10,3,0.98),rgba(20,14,4,0.98))',
-          position: 'sticky', top: 0, zIndex: 100,
+          borderBottom: '1px solid #2a1e08',
+          padding: '10px 0',
+          position: 'sticky',
+          top: 0,
+          zIndex: 2000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}>
-          <div style={{
+          <span style={{
             fontFamily: '"Trajan Pro","Palatino Linotype",Palatino,Georgia,serif',
-            fontSize: 17, fontWeight: 700, color: '#c9a227',
-            letterSpacing: '0.15em', textTransform: 'uppercase',
+            fontSize: 22,
+            fontWeight: 900,
+            color: '#c9a227',
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
             textShadow: '0 0 20px rgba(201,162,39,0.3)',
+            textAlign: 'center',
+            width: '100%',
           }}>
-            ⚔ Achilles Heel
-          </div>
-          <button
-            onClick={() => setStarted(false)}
-            style={{
-              marginLeft: 'auto', background: 'none',
-              border: '1px solid #3a2a10', borderRadius: 6,
-              color: '#6a5a30', cursor: 'pointer', padding: '5px 14px',
-              fontSize: 11, fontFamily: '"Palatino Linotype",Georgia,serif',
-              letterSpacing: '0.1em', textTransform: 'uppercase',
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor='#c9a227'; e.currentTarget.style.color='#c9a227'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor='#3a2a10'; e.currentTarget.style.color='#6a5a30'; }}
-          >
-            Rules
-          </button>
+            Achilles Chess
+          </span>
         </div>
         <ChessGame />
       </div>

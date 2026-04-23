@@ -9,12 +9,6 @@ const WS_URL =
     ? 'ws://localhost:10000'
     : 'wss://achillesheelonline.onrender.com');
 
-function safeSend(ws, data) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-  ws.send(JSON.stringify(data));
-  return true;
-}
-
 // ─── Local engine ──────────────────────────────────────────────
 function makeId() { return Math.random().toString(36).slice(2); }
 function makePiece(type, color) { return { type, color, id: makeId() }; }
@@ -135,7 +129,7 @@ function Modal({ title, children, onClose }) {
   );
 }
 
-// ─── Rules Modal ──────────────────────────────────────────────
+// ─── Rules ────────────────────────────────────────────────────
 const RULES = [
   { icon:'⚔', title:'The Achilles', text:"Before the battle, each warrior secretly designates one non-pawn piece as their Achilles — their hidden vulnerability. Lose your Achilles and the war is over." },
   { icon:'🛡', title:'Patroclus — The Shield', text:"The piece mirroring your Achilles across the board becomes your Patroclus. When Patroclus falls, your Achilles is roused to fury." },
@@ -164,7 +158,6 @@ function RulesModal({ onClose }) {
           fontFamily:'"Trajan Pro","Palatino Linotype",Georgia,serif',
           color:'#c9a227', textShadow:'0 0 20px rgba(201,162,39,0.4)',
         }}>⚔ Laws of War</div>
-
         {RULES.map((rule, i) => (
           <div key={i}>
             <div style={{ display:'flex', gap:16, alignItems:'flex-start', padding:'16px 0' }}>
@@ -187,7 +180,6 @@ function RulesModal({ onClose }) {
             )}
           </div>
         ))}
-
         <div style={{ marginTop:24, textAlign:'center' }}>
           <Btn onClick={onClose}>Close</Btn>
         </div>
@@ -219,7 +211,6 @@ function PromotionModal({ color, onChoose, onChangeMode, changeMode }) {
       </div>
     );
   }
-
   return (
     <Modal title="⚔ Pawn Promoted">
       <div style={{ fontSize:14, color:'#c8a86a', marginBottom:20, lineHeight:1.7 }}>
@@ -356,7 +347,7 @@ function GreekDivider() {
   );
 }
 
-// ─── Top bar (shared between local and online game views) ─────
+// ─── Top bar ──────────────────────────────────────────────────
 function GameTopBar({ label, sublabel, onBack, onRules }) {
   return (
     <div style={{
@@ -381,59 +372,29 @@ function GameTopBar({ label, sublabel, onBack, onRules }) {
       }}>
         {label || '⚔ Achilles Heel'}
       </div>
-
       {sublabel && (
-        <div style={{
-          fontSize:13,
-          color:'#7a6030',
-          fontFamily:'"Palatino Linotype",Georgia,serif'
-        }}>
+        <div style={{ fontSize:13, color:'#7a6030', fontFamily:'"Palatino Linotype",Georgia,serif' }}>
           {sublabel}
         </div>
       )}
-
       <div style={{ marginLeft:'auto', display:'flex', gap:10, alignItems:'center' }}>
-      
-      <button
-      onClick={onRules}
-      style={{
-        background:'none',
-        border:'1px solid #3a2a10',
-        borderRadius:6,
-        color:'#c9a227',
-        cursor:'pointer',
-        padding:'5px 14px',
-        fontSize:11,
-        fontFamily:'"Palatino Linotype",Georgia,serif',
-        letterSpacing:'0.1em',
-        textTransform:'uppercase',
-      }}
-    >
-      ⚔ Rules
-      </button>
-
-        <button
-          onClick={onBack}
-          style={{
-            background:'none',
-            border:'1px solid #3a2a10',
-            borderRadius:6,
-            color:'#6a5a30',
-            cursor:'pointer',
-            padding:'5px 14px',
-            fontSize:11,
-            fontFamily:'"Palatino Linotype",Georgia,serif',
-            letterSpacing:'0.1em',
-            textTransform:'uppercase',
-            transition:'all 0.15s',
-          }}
-        >
-          ← Home
-        </button>
+        <button onClick={onRules} style={{
+          background:'none', border:'1px solid #3a2a10', borderRadius:6,
+          color:'#c9a227', cursor:'pointer', padding:'5px 14px', fontSize:11,
+          fontFamily:'"Palatino Linotype",Georgia,serif', letterSpacing:'0.1em',
+          textTransform:'uppercase', transition:'all 0.15s',
+        }}>Rules</button>
+        <button onClick={onBack} style={{
+          background:'none', border:'1px solid #3a2a10', borderRadius:6,
+          color:'#6a5a30', cursor:'pointer', padding:'5px 14px', fontSize:11,
+          fontFamily:'"Palatino Linotype",Georgia,serif', letterSpacing:'0.1em',
+          textTransform:'uppercase', transition:'all 0.15s',
+        }}>← Home</button>
       </div>
     </div>
   );
 }
+
 // ─── Share URL bar ────────────────────────────────────────────
 function ShareBar({ url, roomCode }) {
   const [copied, setCopied] = useState(false);
@@ -468,8 +429,7 @@ function ShareBar({ url, roomCode }) {
         border:'none', borderRadius:5,
         padding:'6px 14px', fontSize:12, cursor:'pointer',
         fontFamily:'"Trajan Pro","Palatino Linotype",Georgia,serif',
-        fontWeight:700, letterSpacing:'0.08em',
-        transition:'all 0.2s',
+        fontWeight:700, letterSpacing:'0.08em', transition:'all 0.2s',
       }}>
         {copied ? '✓ Copied' : 'Copy'}
       </button>
@@ -746,51 +706,22 @@ function LocalGame({ onBack }) {
 
   return (
     <div style={{ minHeight:'100vh', background:'#0e0a03' }}>
-      {showRules && (
-  <Modal title="⚔ Laws of War" onClose={() => setShowRules(false)}>
-    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-      {RULES.map((rule, i) => (
-        <div key={i} style={{ display:'flex', gap:14 }}>
-          <div style={{ fontSize:18 }}>{rule.icon}</div>
-          <div>
-            <div style={{
-              fontWeight:700,
-              fontSize:13,
-              color:'#c9a227',
-              letterSpacing:'0.08em',
-              textTransform:'uppercase'
-            }}>
-              {rule.title}
-            </div>
-            <div style={{
-              fontSize:13,
-              color:'#7a6030',
-              lineHeight:1.6
-            }}>
-              {rule.text}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  </Modal>
-)}
+      <GameTopBar label="⚔ Local Duel" onBack={onBack} onRules={() => setShowRules(true)} />
+      {showRules && <RulesModal onClose={() => setShowRules(false)} />}
+      {modal && <Modal title={modal.title} onClose={()=>setModal(null)}>{modal.body}</Modal>}
+      <ToastLayer toasts={toasts} />
 
       <div style={{ display:'flex', gap:0, alignItems:'flex-start', justifyContent:'center', padding:'16px 8px' }}>
         <div style={{ display:'flex', flexDirection:'column', gap:10, alignItems:'center', flex:'0 0 auto' }}>
           <div style={{ width:'100%', maxWidth:590 }}>
             <StatusBar text={statusText()} immortal={{ ...state.immortal, countdown:state.immortalCountdown }} />
           </div>
-
           {state.promotion && !promotionChangeMode && (
             <PromotionModal color={state.promotion.color} onChoose={handlePromotion} onChangeMode={setPromotionChangeMode} changeMode={false} />
           )}
-          {modal && <Modal title={modal.title} onClose={()=>setModal(null)}>{modal.body}</Modal>}
-          <ToastLayer toasts={toasts} />
           {promotionChangeMode && (
             <PromotionModal color={state.promotion?.color} onChoose={()=>{}} onChangeMode={setPromotionChangeMode} changeMode={true} />
           )}
-
           <ChessBoard
             board={state.board}
             onCellClick={handleClick}
@@ -819,6 +750,7 @@ function LocalGame({ onBack }) {
 //  ONLINE GAME
 // ═══════════════════════════════════════════════════════════════
 function OnlineGame({ roomCode, myColor, initialState, ws, onBack }) {
+
   const [game, setGame]           = useState(initialState);
   const [selected, setSelected]   = useState(null);
   const [legalMoves, setLegalMoves] = useState([]);
@@ -826,9 +758,16 @@ function OnlineGame({ roomCode, myColor, initialState, ws, onBack }) {
   const [modal, setModal]         = useState(null);
   const [promotionChangeMode, setPromotionChangeMode] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const fallbackRoomCode = roomCode || ws?.roomCode || new URLSearchParams(window.location.search).get('room') || '';
+  const [localRoomCode, setLocalRoomCode] = useState(fallbackRoomCode);
 
-  const shareUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+  useEffect(() => {
+    if (fallbackRoomCode && fallbackRoomCode !== localRoomCode) {
+      setLocalRoomCode(fallbackRoomCode);
+    }
+  }, [fallbackRoomCode]);
 
+  const shareUrl = `${window.location.origin}${window.location.pathname}`;
   const addToast = useCallback((msg, ms=3500) => {
     const id = Date.now()+Math.random();
     setToasts(t=>[...t,{id,message:msg}]);
@@ -840,7 +779,8 @@ function OnlineGame({ roomCode, myColor, initialState, ws, onBack }) {
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
       if (msg.type==='sync') {
-        setGame(prev => ({...msg.gameState, myColor: prev?.myColor || myColor}));
+        // myColor comes from the server per-client now, but keep the one we entered with
+        setGame(msg.gameState);
         setSelected(null); setLegalMoves([]);
         setPromotionChangeMode(false);
       } else if (msg.type==='invalid-move') {
@@ -853,7 +793,7 @@ function OnlineGame({ roomCode, myColor, initialState, ws, onBack }) {
         addToast('Your opponent has entered the arena!');
       }
     };
-  }, [ws, addToast, myColor]);
+  }, [ws, addToast]);
 
   const board = game?.board;
   const opp = myColor==='white'?'black':'white';
@@ -888,7 +828,6 @@ function OnlineGame({ roomCode, myColor, initialState, ws, onBack }) {
       }
       const {row:pRow,col:pCol} = myPromotion;
       if(r===pRow&&c===pCol){addToast('Cannot choose the promoting pawn');return;}
-      // Send flat fields (server reads data.option, data.chosenRow, etc.)
       sendWS({ type:'promotion', option:'change', newType:piece.type, chosenRow:r, chosenCol:c });
       setPromotionChangeMode(false);
       return;
@@ -916,7 +855,6 @@ function OnlineGame({ roomCode, myColor, initialState, ws, onBack }) {
     const target = board?.[r]?.[c];
     if(target&&target.color===myColor){setSelected([r,c]);setLegalMoves(getLegalMovesLocal(board,r,c));return;}
 
-    // Send flat fields (server reads data.from, data.to)
     sendWS({ type:'move', from:[sr,sc], to:[r,c] });
     setSelected(null); setLegalMoves([]);
   }
@@ -931,63 +869,89 @@ function OnlineGame({ roomCode, myColor, initialState, ws, onBack }) {
 
   const revealedEnemyType = game?.revealedAchilles?.[opp] ? game?.achilles?.[opp]?.type : null;
 
+  // Room code and URL copy handlers
+  const displayRoomCode = localRoomCode || 'Loading...';
+  const roomUrl = `${window.location.origin}${window.location.pathname}${localRoomCode ? `?room=${localRoomCode}` : ''}`;
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+
+  function copyCode() {
+    if (!localRoomCode) return;
+    navigator.clipboard.writeText(localRoomCode);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 1500);
+  }
+  function copyUrl() {
+    if (!localRoomCode) return;
+    navigator.clipboard.writeText(roomUrl);
+    setCopiedUrl(true);
+    setTimeout(() => setCopiedUrl(false), 1500);
+  }
+
   return (
     <div style={{ minHeight:'100vh', background:'#0e0a03' }}>
       <GameTopBar
-        label={`ROOM ${roomCode}`}
-        sublabel={`You are ${myColor.toUpperCase()}`}
+        label={`ROOM`}
+        sublabel={`You are ${myColor.toUpperCase()} • Room ${localRoomCode || 'Loading...'}`}
         onBack={onBack}
         onRules={() => setShowRules(true)}
       />
-      {showRules && (
-  <Modal title="⚔ Laws of War" onClose={() => setShowRules(false)}>
-    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-      {RULES.map((rule, i) => (
-        <div key={i} style={{ display:'flex', gap:14 }}>
-          <div style={{ fontSize:18 }}>{rule.icon}</div>
-          <div>
-            <div style={{
-              fontWeight:700,
-              fontSize:13,
-              color:'#c9a227',
-              letterSpacing:'0.08em',
-              textTransform:'uppercase'
-            }}>
-              {rule.title}
-            </div>
-            <div style={{
-              fontSize:13,
-              color:'#7a6030',
-              lineHeight:1.6
-            }}>
-              {rule.text}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  </Modal>
-)}
+      {/* Room code and share URL with copy buttons */}
+      <div style={{
+        width: '100%',
+        background: 'rgba(201,162,39,0.06)',
+        borderBottom: '1px solid #4a3a15',
+        padding: '10px 0',
+        textAlign: 'center',
+        fontFamily: '"Palatino Linotype",Georgia,serif',
+        color: '#c9a227',
+        fontSize: 16,
+        letterSpacing: '0.12em',
+        marginBottom: 8,
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 18,
+      }}>
+        <span style={{ fontWeight: 700 }}>Room Code:</span>
+        <span style={{ color: '#ffe08a', fontWeight: 900, marginRight: 8 }}>{displayRoomCode}</span>
+        <button onClick={copyCode} disabled={!localRoomCode} style={{
+          background: copiedCode ? 'linear-gradient(135deg,#556B2F,#3a4a1f)' : 'linear-gradient(135deg,#c9a227,#8a6800)',
+          color: copiedCode ? '#d4e8a0' : '#fff8e1',
+          border: 'none', borderRadius: 5,
+          padding: '4px 12px', fontSize: 13, cursor: 'pointer',
+          fontFamily: '"Trajan Pro","Palatino Linotype",Georgia,serif',
+          fontWeight: 700, letterSpacing: '0.08em', transition: 'all 0.2s',
+          marginRight: 18,
+        }}>{copiedCode ? '✓ Copied' : 'Copy'}</button>
+        <span style={{ fontWeight: 700 }}>Room URL:</span>
+        <span style={{ color: '#ffe08a', fontWeight: 900, marginRight: 8 }}>{roomUrl}</span>
+        <button onClick={copyUrl} disabled={!localRoomCode} style={{
+          background: copiedUrl ? 'linear-gradient(135deg,#556B2F,#3a4a1f)' : 'linear-gradient(135deg,#c9a227,#8a6800)',
+          color: copiedUrl ? '#d4e8a0' : '#fff8e1',
+          border: 'none', borderRadius: 5,
+          padding: '4px 12px', fontSize: 13, cursor: !localRoomCode ? 'not-allowed' : 'pointer',
+          opacity: !localRoomCode ? 0.5 : 1,
+          fontFamily: '"Trajan Pro","Palatino Linotype",Georgia,serif',
+          fontWeight: 700, letterSpacing: '0.08em', transition: 'all 0.2s',
+        }}>{copiedUrl ? '✓ Copied' : 'Copy'}</button>
+      </div>
+      {showRules && <RulesModal onClose={() => setShowRules(false)} />}
+      {modal && <Modal title={modal.title} onClose={()=>setModal(null)} />}
+      <ToastLayer toasts={toasts} />
 
       <div style={{ display:'flex', gap:0, alignItems:'flex-start', justifyContent:'center', padding:'16px 8px' }}>
         <div style={{ display:'flex', flexDirection:'column', gap:10, alignItems:'center', flex:'0 0 auto' }}>
-
-          {/* Share URL bar */}
-          <ShareBar url={shareUrl} roomCode={roomCode} />
-
           <div style={{ width:'100%', maxWidth:590 }}>
             <StatusBar text={statusText()} immortal={game?{...game.immortal,countdown:game.immortalCountdown}:null} />
           </div>
-
           {myPromotion && !promotionChangeMode && (
             <PromotionModal color={myColor} onChoose={handlePromotion} onChangeMode={setPromotionChangeMode} changeMode={false} />
           )}
-          {modal && <Modal title={modal.title} onClose={()=>setModal(null)} />}
-          <ToastLayer toasts={toasts} />
           {promotionChangeMode && (
             <PromotionModal color={myColor} onChoose={()=>{}} onChangeMode={setPromotionChangeMode} changeMode={true} />
           )}
-
           {board && (
             <ChessBoard
               board={board}
@@ -1007,7 +971,6 @@ function OnlineGame({ roomCode, myColor, initialState, ws, onBack }) {
           )}
           <div style={{ width:'100%', maxWidth:590 }}><Legend /></div>
         </div>
-
         <div style={{ paddingLeft:16, paddingTop:6, flex:'0 0 220px' }}>
           <MoveLog moves={game?.moveLog} />
         </div>
@@ -1020,20 +983,29 @@ function OnlineGame({ roomCode, myColor, initialState, ws, onBack }) {
 //  LOBBY
 // ═══════════════════════════════════════════════════════════════
 function Lobby({ onLocalPlay, onEnterGame }) {
-  const [inputCode, setInputCode]    = useState('');
-  const [status, setStatus]          = useState('');
-  const [shareLink, setShareLink]    = useState('');
-  const [roomCode, setRoomCode]      = useState('');
-  const [copied, setCopied]          = useState(false);
-  const wsRef = useRef(null);
+  const [inputCode, setInputCode] = useState('');
+  const [status, setStatus]       = useState('');
+  const [shareLink, setShareLink] = useState('');
+  const [roomCode, setRoomCode]   = useState('');
+  const [copied, setCopied]       = useState(false);
+  const wsRef       = useRef(null);
+  const roomCodeRef = useRef('');
+  const myColorRef  = useRef('white');
 
-  // Auto-join from URL param on mount
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('room');
-    if (code?.length >= 4) {
-  setTimeout(() => joinRoom(code.toUpperCase()), 50);
-  }
+    const urlRoom = new URLSearchParams(window.location.search).get('room');
+    if (!urlRoom) return;
+    const room = urlRoom.toUpperCase().trim();
+    if (!room) return;
+    roomCodeRef.current = room;
+    myColorRef.current = 'black';
+    setInputCode(room);
+    setStatus(`Joining room ${room}…`);
+    connect(() => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'join-room', roomCode: room }));
+      }
+    });
   }, []);
 
   function connect(onOpen) {
@@ -1044,29 +1016,37 @@ function Lobby({ onLocalPlay, onEnterGame }) {
     socket.onerror = () => setStatus('⚔ Connection failed. The server may be asleep — try again in a moment.');
     socket.onmessage = (e) => {
       const msg = JSON.parse(e.data);
-      if (msg.type==='room-created') {
-        const code = msg.roomCode || Math.random().toString(36).slice(2, 8).toUpperCase();
+
+      if (msg.type === 'room-created') {
+        const code = msg.roomCode;
+        roomCodeRef.current = code;
+        myColorRef.current = 'white';
         setRoomCode(code);
         const link = `${window.location.origin}${window.location.pathname}?room=${code}`;
         setShareLink(link);
-        // Update URL without navigation
-        window.history.replaceState({}, '', `?room=${code}`);
-        setStatus('Room created! Share the link with your opponent, then wait here.');
-      } else if (msg.type==='player-joined') {
+        // Put room code in URL so creator can share it
+        setStatus(`Room ${code} created! Share the link below with your opponent.`);
+      } else if (msg.type === 'player-joined') {
         setStatus('⚔ Opponent arrived! Entering arena…');
-      } else if (msg.type==='sync') {
-        // Enter the game screen — push a new history entry so back button works
-        window.history.pushState({ game: true }, '', window.location.href);
+      } else if (msg.type === 'sync') {
+        // Both creator and joiner enter game on sync
+        // Always get the latest code from the server or URL
+        let code = msg.roomCode || roomCodeRef.current || new URLSearchParams(window.location.search).get('room') || '';
+        // If joining, msg.roomCode may not be present, so fallback to ref or URL
+        if (!code && wsRef.current && wsRef.current.roomCode) code = wsRef.current.roomCode;
+        const color = msg.myColor || myColorRef.current;
+        const resolvedCode = wsRef.current?.roomCode || code;
+        if (resolvedCode) {
+          const newUrl = `${window.location.origin}${window.location.pathname}?room=${resolvedCode}`;
+          window.history.replaceState({ game: true }, '', newUrl);
+        }
         onEnterGame({
-          roomCode:
-            roomCode ||
-            new URLSearchParams(window.location.search).get('room') ||
-            Math.random().toString(36).slice(2, 8).toUpperCase(),
-          myColor: msg.myColor,
+          roomCode: resolvedCode,
+          myColor: color,
           initialState: msg.gameState,
           ws: wsRef.current,
         });
-      } else if (msg.type==='error') {
+      } else if (msg.type === 'error') {
         setStatus(msg.message || 'An error occurred');
       }
     };
@@ -1074,25 +1054,24 @@ function Lobby({ onLocalPlay, onEnterGame }) {
 
   function createRoom() {
     setStatus('Forging the arena…');
-    connect(() => wsRef.current.send(JSON.stringify({ type:'create-room' })));
+    myColorRef.current = 'white';
+    connect(() => wsRef.current.send(JSON.stringify({ type: 'create-room' })));
   }
 
   function joinRoom(code) {
     const room = (code || inputCode).toUpperCase().trim();
     if (!room) { setStatus('Enter a room code first'); return; }
+    roomCodeRef.current = room;
+    myColorRef.current = 'black';
     setStatus(`Entering room ${room}…`);
-    connect(() => wsRef.current.send(JSON.stringify({ type:'join-room', roomCode: room })));
+    connect(() => wsRef.current.send(JSON.stringify({ type: 'join-room', roomCode: room })));
   }
 
   function copyLink() {
-  navigator.clipboard.writeText(shareLink).then(() => {
-    setCopied(true);
-
-    // 🚨 THIS is the key change
-    window.location.href = shareLink;
-
-    setTimeout(() => setCopied(false), 2000);
-  });
+    navigator.clipboard.writeText(shareLink).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   }
 
   return (
@@ -1165,18 +1144,15 @@ function Lobby({ onLocalPlay, onEnterGame }) {
   );
 }
 
-// ─── Root ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  ROOT
+// ═══════════════════════════════════════════════════════════════
 export default function ChessGame() {
-  const [screen, setScreen] = useState(
-  initialRoom ? 'online' : 'lobby'
-  );
+  const [screen, setScreen]           = useState('lobby');
   const [onlineProps, setOnlineProps] = useState(null);
-  const initialRoom = new URLSearchParams(window.location.search).get('room');
 
-  // Handle browser back button
   useEffect(() => {
-    function handlePop(e) {
-      // If we're in a game, popstate means user pressed back → go to lobby
+    function handlePop() {
       if (screen === 'online' || screen === 'local') {
         setScreen('lobby');
         setOnlineProps(null);
@@ -1186,28 +1162,18 @@ export default function ChessGame() {
     return () => window.removeEventListener('popstate', handlePop);
   }, [screen]);
 
-  useEffect(() => {
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get('room');
-
-  if (code && onlineProps) {
-    setScreen('online');
-  }
-  }, [onlineProps]);
-
   function enterOnlineGame(props) {
     setOnlineProps(props);
     setScreen('online');
   }
 
   function goHome() {
-  const confirmLeave = window.confirm('Are you sure you want to leave the game?');
-  if (!confirmLeave) return;
-
-  window.history.replaceState({}, '', window.location.pathname);
-  setScreen('lobby');
-  setOnlineProps(null);
-}
+    const confirmLeave = window.confirm('Are you sure you want to leave the game?');
+    if (!confirmLeave) return;
+    window.history.replaceState({}, '', window.location.pathname);
+    setScreen('lobby');
+    setOnlineProps(null);
+  }
 
   if (screen === 'local') {
     return <LocalGame onBack={goHome} />;
@@ -1226,4 +1192,4 @@ export default function ChessGame() {
   }
 
   return <Lobby onLocalPlay={() => setScreen('local')} onEnterGame={enterOnlineGame} />;
-} 
+}
