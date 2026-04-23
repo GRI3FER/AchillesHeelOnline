@@ -643,12 +643,9 @@ function LocalGame({ onBack }) {
       }
       if (isOppPat) {
         nb[r][c] = piece; nb[sr][sc] = null;
-        const im={...prev.immortal,[opp]:true};
-        const ic={...prev.immortalCountdown,[opp]:5};
         const newPat={...prev.patroclus,[opp]:null};
-        return { ...prev, board:nb, patroclus:newPat, immortal:im, immortalCountdown:ic, turn:prev.turn+1,
-          moveLog:[...prev.moveLog,{from:[sr,sc],to:[r,c],piece,captured:tgt,
-            note:`Patroclus slain — ${opp} Achilles immortal for 5 moves`}] };
+        return { ...prev, board:nb, patroclus:newPat, turn:prev.turn+1,
+          moveLog:[...prev.moveLog,{from:[sr,sc],to:[r,c],piece,captured:tgt}] };
       }
 
       nb[r][c] = piece; nb[sr][sc] = null;
@@ -714,7 +711,7 @@ function LocalGame({ onBack }) {
       <div style={{ display:'flex', gap:0, alignItems:'flex-start', justifyContent:'center', padding:'16px 8px' }}>
         <div style={{ display:'flex', flexDirection:'column', gap:10, alignItems:'center', flex:'0 0 auto' }}>
           <div style={{ width:'100%', maxWidth:590 }}>
-            <StatusBar text={statusText()} immortal={{ ...state.immortal, countdown:state.immortalCountdown }} />
+            <StatusBar text={statusText()} />
           </div>
           {state.promotion && !promotionChangeMode && (
             <PromotionModal color={state.promotion.color} onChoose={handlePromotion} onChangeMode={setPromotionChangeMode} changeMode={false} />
@@ -732,7 +729,6 @@ function LocalGame({ onBack }) {
             myColor={turnColor}
             revealedAchilles={state.revealedAchilles}
             revealedEnemyType={localRevealedEnemyType}
-            immortal={state.immortal}
             hideMarkers={true}
             highlightChangeMode={promotionChangeMode}
             promotionColor={state.promotion?.color}
@@ -938,13 +934,13 @@ function OnlineGame({ roomCode, myColor, initialState, ws, onBack }) {
         }}>{copiedUrl ? '✓ Copied' : 'Copy'}</button>
       </div>
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
-      {modal && <Modal title={modal.title} onClose={()=>setModal(null)} />}
+      {modal && <Modal title={modal.title} onClose={()=>setModal(null)}>{modal.body}</Modal>}
       <ToastLayer toasts={toasts} />
 
       <div style={{ display:'flex', gap:0, alignItems:'flex-start', justifyContent:'center', padding:'16px 8px' }}>
         <div style={{ display:'flex', flexDirection:'column', gap:10, alignItems:'center', flex:'0 0 auto' }}>
           <div style={{ width:'100%', maxWidth:590 }}>
-            <StatusBar text={statusText()} immortal={game?{...game.immortal,countdown:game.immortalCountdown}:null} />
+            <StatusBar text={statusText()} immortal={null}/>
           </div>
           {myPromotion && !promotionChangeMode && (
             <PromotionModal color={myColor} onChoose={handlePromotion} onChangeMode={setPromotionChangeMode} changeMode={false} />
