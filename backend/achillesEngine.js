@@ -224,8 +224,7 @@ export function applyMove(state, from, to) {
     state.immortalCountdown[opp] = 5;
     state.board[tr][tc] = piece;
     state.board[fr][fc] = null;
-    state.moveLog.push({ from, to, piece, captured: target,
-      note: `Patroclus slain — ${opp} Achilles immortal for 5 moves` });
+    state.moveLog.push({ from, to, piece, captured: target });
     syncPositions(state);
     state.turn++;
     return state;
