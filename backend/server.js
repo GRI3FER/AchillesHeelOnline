@@ -19,14 +19,9 @@ server.listen(PORT, "0.0.0.0", () => {
 const wss = new WebSocketServer({ server });
 
 // ─────────────────────────────────────────────
-// ROOM STORAGE
+// ROOMS
 // ─────────────────────────────────────────────
 const rooms = new Map();
-
-// ─────────────────────────────────────────────
-// CONFIG
-// ─────────────────────────────────────────────
-const ROOM_TTL = 1000 * 60 * 60; // 1 hour
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -41,8 +36,6 @@ function getRoom(code) {
 
 function createRoom() {
   let code;
-
-  // Ensure unique room code
   do {
     code = createRoomCode();
   } while (rooms.has(code));
@@ -58,8 +51,33 @@ function createRoom() {
   return code;
 }
 
+// ─────────────────────────────────────────────
+// 🔥 CRITICAL FIX: PER-PLAYER STATE FILTER
+// ─────────────────────────────────────────────
+function buildClientState(state, color) {
+  return {
+    ...state,
+
+    // Only show YOUR immortal status
+    immortal: {
+      white: color === "white" ? state.immortal.white : false,
+      black: color === "black" ? state.immortal.black : false,
+    },
+
+    // Hide opponent countdown info
+    immortalCountdown: {
+      white: color === "white" ? state.immortalCountdown.white : 0,
+      black: color === "black" ? state.immortalCountdown.black : 0,
+    }
+  };
+}
+
+// ─────────────────────────────────────────────
+// BROADCAST
+// ─────────────────────────────────────────────
 function broadcastRoom(code, data) {
   const msg = JSON.stringify(data);
+
   wss.clients.forEach((client) => {
     if (client.readyState === 1 && client.roomCode === code) {
       client.send(msg);
@@ -68,21 +86,21 @@ function broadcastRoom(code, data) {
 }
 
 // ─────────────────────────────────────────────
-// CLEANUP OLD ROOMS
+// CLEANUP ROOMS
 // ─────────────────────────────────────────────
 setInterval(() => {
   const now = Date.now();
 
   for (const [code, room] of rooms.entries()) {
-    if (now - room.createdAt > ROOM_TTL) {
+    if (now - room.createdAt > 1000 * 60 * 60) {
       rooms.delete(code);
       console.log("Deleted stale room:", code);
     }
   }
-}, 1000 * 60 * 5); // every 5 minutes
+}, 1000 * 60 * 5);
 
 // ─────────────────────────────────────────────
-// WEBSOCKET LOGIC
+// WS SERVER
 // ─────────────────────────────────────────────
 wss.on("connection", (ws) => {
   console.log("CLIENT CONNECTED");
@@ -94,27 +112,26 @@ wss.on("connection", (ws) => {
 
       // ── CREATE ROOM ──
       if (type === "create-room") {
-  const code = createRoom();
-  ws.roomCode = code;
-  ws.color = "white";
+        const code = createRoom();
+        ws.roomCode = code;
+        ws.color = "white";
 
-  const room = rooms.get(code);
+        const room = rooms.get(code);
 
-  // Send room-created (for lobby UI)
-  ws.send(JSON.stringify({
-    type: "room-created",
-    roomCode: code
-  }));
+        ws.send(JSON.stringify({
+          type: "room-created",
+          roomCode: code
+        }));
 
-  // ✅ Immediately send game state so frontend doesn't hang
-  ws.send(JSON.stringify({
-    type: "sync",
-    gameState: room.state,
-    myColor: "white"
-  }));
+        // 🔥 IMPORTANT: send sync immediately so UI doesn't hang
+        ws.send(JSON.stringify({
+          type: "sync",
+          gameState: buildClientState(room.state, ws.color),
+          myColor: ws.color
+        }));
 
-  return;
-}
+        return;
+      }
 
       // ── JOIN ROOM ──
       if (type === "join-room") {
@@ -126,7 +143,6 @@ wss.on("connection", (ws) => {
           return;
         }
 
-        // Prevent overfilling
         if (room.players >= 2) {
           ws.send(JSON.stringify({ type: "error", message: "Room is full" }));
           return;
@@ -136,19 +152,19 @@ wss.on("connection", (ws) => {
         ws.color = "black";
         room.players++;
 
-        // Send sync to joiner
+        // Send joiner sync
         ws.send(JSON.stringify({
           type: "sync",
-          gameState: room.state,
+          gameState: buildClientState(room.state, ws.color),
           myColor: ws.color
         }));
 
-        // Send sync to creator
+        // Send creator sync
         wss.clients.forEach((client) => {
           if (client.readyState === 1 && client.roomCode === code && client !== ws) {
             client.send(JSON.stringify({
               type: "sync",
-              gameState: room.state,
+              gameState: buildClientState(room.state, client.color),
               myColor: client.color
             }));
           }
@@ -158,7 +174,7 @@ wss.on("connection", (ws) => {
         return;
       }
 
-      // ── GAME ACTIONS ──
+      // ── GAME LOGIC ──
       const room = getRoom(ws.roomCode);
       if (!room) return;
 
@@ -194,12 +210,12 @@ wss.on("connection", (ws) => {
 
       room.state = state;
 
-      // Sync to both players
+      // ── SYNC (FILTERED PER PLAYER) ──
       wss.clients.forEach((client) => {
         if (client.readyState === 1 && client.roomCode === ws.roomCode) {
           client.send(JSON.stringify({
             type: "sync",
-            gameState: state,
+            gameState: buildClientState(state, client.color),
             myColor: client.color
           }));
         }
@@ -211,7 +227,7 @@ wss.on("connection", (ws) => {
     }
   });
 
-  // ── HANDLE DISCONNECT ──
+  // ── DISCONNECT ──
   ws.on("close", () => {
     if (!ws.roomCode) return;
 
@@ -224,7 +240,9 @@ wss.on("connection", (ws) => {
       rooms.delete(ws.roomCode);
       console.log("Deleted empty room:", ws.roomCode);
     } else {
-      broadcastRoom(ws.roomCode, { type: "opponent-disconnected" });
+      broadcastRoom(ws.roomCode, {
+        type: "opponent-disconnected"
+      });
     }
   });
 });
