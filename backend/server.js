@@ -6,9 +6,80 @@ import engine from "./achillesEngine.js";
 const PORT = process.env.PORT || 10000;
 
 const app = express();
+app.use(express.json());
 
 app.get("/", (req, res) => {
   res.status(200).send("⚔ Achilles Heel backend running");
+});
+
+// ─────────────────────────────────────────────
+// BOT API (for MCTS self-play)
+// ─────────────────────────────────────────────
+const botGames = new Map(); // gameId -> state
+
+function generateGameId() {
+  return Math.random().toString(36).slice(2, 15);
+}
+
+// Create a new bot game
+app.post("/api/bot/game/start", (req, res) => {
+  const gameId = generateGameId();
+  const state = engine.createInitialState();
+  botGames.set(gameId, state);
+  res.json({ gameId });
+});
+
+// Get game state
+app.get("/api/bot/game/:gameId/state", (req, res) => {
+  const { gameId } = req.params;
+  const state = botGames.get(gameId);
+  if (!state) return res.status(404).json({ error: "Game not found" });
+  res.json(state);
+});
+
+// Get legal moves for a piece
+app.get("/api/bot/game/:gameId/legal-moves/:row/:col", (req, res) => {
+  const { gameId, row, col } = req.params;
+  const state = botGames.get(gameId);
+  if (!state) return res.status(404).json({ error: "Game not found" });
+  const moves = engine.getLegalMoves(state.board, parseInt(row), parseInt(col));
+  res.json({ moves });
+});
+
+// Apply a move
+app.post("/api/bot/game/:gameId/move", (req, res) => {
+  const { gameId } = req.params;
+  const { from, to } = req.body;
+  const state = botGames.get(gameId);
+  if (!state) return res.status(404).json({ error: "Game not found" });
+  
+  const newState = engine.applyMove(state, from, to);
+  botGames.set(gameId, newState);
+  res.json({ success: true, state: newState });
+});
+
+// Set Achilles
+app.post("/api/bot/game/:gameId/set-achilles", (req, res) => {
+  const { gameId } = req.params;
+  const { color, row, col } = req.body;
+  const state = botGames.get(gameId);
+  if (!state) return res.status(404).json({ error: "Game not found" });
+  
+  const newState = engine.setAchilles(state, color, row, col);
+  botGames.set(gameId, newState);
+  res.json({ success: true, state: newState });
+});
+
+// Handle promotion
+app.post("/api/bot/game/:gameId/promotion", (req, res) => {
+  const { gameId } = req.params;
+  const { color, option, newType, chosenRow, chosenCol } = req.body;
+  const state = botGames.get(gameId);
+  if (!state) return res.status(404).json({ error: "Game not found" });
+  
+  const newState = engine.handlePromotion(state, color, option, newType, chosenRow, chosenCol);
+  botGames.set(gameId, newState);
+  res.json({ success: true, state: newState });
 });
 
 const server = http.createServer(app);
